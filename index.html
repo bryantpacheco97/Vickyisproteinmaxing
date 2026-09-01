@@ -995,7 +995,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button class="reset" id="reset">Reset everything</button>
     </div>
 
-    <p class="note">Live OpenStreetMap feed for real nearby restaurants, matched against real published nutrition for ~50 national chains. Independents show on the map without data — the real coverage gap that only a nutrition API (e.g. Nutritionix) fully closes. Chain figures are representative; validate against official nutrition guides before production. Dish icons show food type, not real photos — per-dish photography needs a licensed image source.</p>
+    <p class="note">Live OpenStreetMap feed for real nearby restaurants, matched against real published nutrition for ~50 national chains plus NYC-area chains (Just Salad, Chopt, DIG, Pret A Manger, The Halal Guys, &amp;pizza, Fresh&amp;co, Bluestone Lane, Fields Good Chicken). Independents show on the map without data — the real coverage gap that only a nutrition API (e.g. Nutritionix) fully closes. Chain figures are representative; validate against official nutrition guides before production. Dish icons show food type, not real photos — per-dish photography needs a licensed image source.</p>
   </aside>
 
   <div class="right">
@@ -1260,10 +1260,51 @@ const NUTRITION = [
   {id:'ckb',name:'Cracker Barrel',cuisine:'American',keys:['cracker barrel'],items:[
     {name:'Grilled Chicken Tenderloins',cal:380,pro:40},
     {name:'Grilled Sirloin Steak',cal:300,pro:44}]},
+
+  // ---- NYC-area chains (all with published calorie + protein data) ----
+  {id:'jsl',name:'Just Salad',cuisine:'Salads',keys:['just salad'],items:[
+    {name:'Thai Chicken Crunch Salad',cal:290,pro:34},
+    {name:'Backyard BBQ Salad',cal:470,pro:22},
+    {name:'Crispy Chicken Poblano Salad',cal:520,pro:22}]},
+  {id:'cht',name:'Chopt',cuisine:'Salads',keys:['chopt'],items:[
+    {name:'Classic Cobb',cal:600,pro:60},
+    {name:'Crispy Chicken Ranch',cal:575,pro:44},
+    {name:'Summer Corn Caesar Salad',cal:455,pro:39},
+    {name:'Sweet Peach Burrata Bowl',cal:520,pro:23}]},
+  {id:'dig',name:'DIG',cuisine:'Bowls',keys:['dig inn'],items:[
+    {name:'Hot Honey Chicken Bowl',cal:850,pro:48},
+    {name:'Classic Dig',cal:800,pro:38},
+    {name:'Spicy Salmon Bowl',cal:860,pro:33}]},
+  {id:'pam',name:'Pret A Manger',cuisine:'Cafe',keys:['pret a manger'],items:[
+    {name:'Satay Chicken Salad',cal:300,pro:25},
+    {name:'Chicken Caesar Salad',cal:336,pro:24},
+    {name:'Balsamic Chicken & Avocado Sandwich',cal:480,pro:23},
+    {name:'Sea Salt Popcorn',cal:100,pro:2}]},
+  {id:'thg',name:'The Halal Guys',cuisine:'Halal',keys:['halal guys'],items:[
+    {name:'Regular Chicken Platter',cal:648,pro:59},
+    {name:'Combo Platter',cal:1092,pro:72},
+    {name:'Regular Combo Platter',cal:1050,pro:58},
+    {name:'Regular Falafel Platter',cal:1049,pro:29}]},
+  {id:'anp',name:'&pizza',cuisine:'Pizza',keys:['&pizza','and pizza'],items:[
+    {name:'High Protein Salad',cal:366,pro:37},
+    {name:'Maverick Pie',cal:1000,pro:52},
+    {name:'Hail! Caesar Salad Pie',cal:1337,pro:76}]},
+  {id:'frc',name:'Fresh&co',cuisine:'Salads',keys:['fresh&co','fresh & co'],items:[
+    {name:'Roasted Chicken Salad',cal:247,pro:42},
+    {name:'Roasted Turkey, Bacon & Blue Cheese Salad',cal:360,pro:39},
+    {name:'Caesar Salad with Chicken',cal:390,pro:20},
+    {name:'Chipotle-Lime Salad',cal:337,pro:18}]},
+  {id:'bsl',name:'Bluestone Lane',cuisine:'Cafe',keys:['bluestone lane'],items:[
+    {name:'Acai Bowl with Protein',cal:580,pro:24},
+    {name:'Protein Mocha Smoothie',cal:340,pro:21},
+    {name:'Protein PB & Blueberry Smoothie',cal:290,pro:21}]},
+  {id:'fgc',name:'Fields Good Chicken',cuisine:'Chicken',keys:['fields good chicken'],items:[
+    {name:'Qtr Leg & Thigh',cal:230,pro:31},
+    {name:'Fields Good Cobb Salad',cal:780,pro:60}]},
 ];
 
 // chains scattered on the map when live search is unavailable (offline demo)
-const DEMO_IDS = ['chi','cfa','cav','swg','sbx','pnd','wen','mcd','sub','pan','ss','kfc','wing','pop'];
+const DEMO_IDS = ['chi','cfa','cav','swg','sbx','pnd','wen','mcd','sub','pan','ss','kfc','wing','pop','jsl','cht','thg','dig'];
 
 /* ---------------- helpers ---------------- */
 const eff = (it)=> it.pro / it.cal * 100;           // g protein per 100 cal
