@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Density — the leanest, highest-protein food near you</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg:#F6F8F4;
+    --panel:#FFFFFF;
+    --ink:#16211B;
+    --muted:#5C6B60;
+    --line:#DCE3D8;
+    --pine:#17513A;
+    --pine-soft:#E7F0EA;
+    /* efficiency spectrum: high protein-per-cal -> low */
+    --t1:#1F9D57;  /* ≥9  excellent */
+    --t2:#7FA83C;  /* 6–9 good */
+    --t3:#C8842B;  /* 3–6 middling */
+    --t4:#B0553B;  /* <3  calorie-heavy */
+    --shadow:0 1px 2px rgba(22,33,27,.04), 0 8px 24px rgba(22,33,27,.06);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Inter',ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    font-size:15px;
+    line-height:1.45;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- header ---------- */
+  header{
+    padding:22px clamp(16px,4vw,40px) 18px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel);
+  }
+  .brandrow{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .brand{
+    font-family:'Space Grotesk',ui-sans-serif,system-ui,sans-serif;
+    font-weight:700;font-size:30px;letter-spacing:-.02em;color:var(--pine);
+    line-height:1;
+  }
+  .brand .dot{color:var(--t1)}
+  .tag{color:var(--muted);font-size:14.5px;max-width:52ch}
+  .loc{
+    margin-top:12px;display:inline-flex;align-items:center;gap:8px;
+    font-size:13.5px;color:var(--pine);
+    background:var(--pine-soft);border-radius:999px;padding:5px 12px;font-weight:500;
+  }
+  .loc svg{width:14px;height:14px}
+
+  /* ---------- layout ---------- */
+  .wrap{
+    display:grid;
+    grid-template-columns:300px 1fr;
+    gap:0;
+    min-height:calc(100vh - 100px);
+  }
+  .controls{
+    border-right:1px solid var(--line);
+    background:var(--panel);
+    padding:22px clamp(16px,2vw,24px);
+  }
+  .right{display:flex;flex-direction:column;min-width:0}
+  #map{height:340px;width:100%;background:#e9ede7;z-index:0;cursor:crosshair}
+  .results{padding:20px clamp(16px,4vw,40px) 60px;flex:1}
+
+  /* ---------- controls ---------- */
+  .ctl-h{
+    font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:12.5px;
+    letter-spacing:.04em;color:var(--muted);margin:0 0 10px;
+  }
+  .seg{display:flex;flex-direction:column;gap:6px;margin-bottom:26px}
+  .seg button{
+    text-align:left;border:1px solid var(--line);background:#fff;color:var(--ink);
+    padding:10px 12px;border-radius:10px;cursor:pointer;font:inherit;font-size:14px;
+    display:flex;align-items:center;gap:10px;transition:border-color .12s,background .12s;
+  }
+  .seg button .k{
+    width:22px;height:22px;flex:none;border-radius:6px;background:var(--pine-soft);
+    display:grid;place-items:center;color:var(--pine);font-weight:600;font-size:12px;
+  }
+  .seg button:hover{border-color:#bcd0c1}
+  .seg button[aria-pressed="true"]{
+    border-color:var(--pine);background:var(--pine-soft);
+    box-shadow:inset 0 0 0 1px var(--pine);
+  }
+  .field{margin-bottom:24px}
+  .field label{display:flex;justify-content:space-between;align-items:baseline;font-size:13.5px;margin-bottom:8px}
+  .field label b{font-weight:600;color:var(--pine);font-size:15px}
+  input[type=range]{
+    width:100%;-webkit-appearance:none;appearance:none;height:4px;border-radius:4px;
+    background:var(--line);outline:none;margin:6px 0;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;
+    background:var(--pine);cursor:pointer;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.2);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:18px;height:18px;border-radius:50%;background:var(--pine);cursor:pointer;
+    border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.2);
+  }
+  .search input{
+    width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+    font:inherit;font-size:14px;background:#fff;
+  }
+  .search input:focus{outline:2px solid var(--pine);outline-offset:1px;border-color:var(--pine)}
+  .reset{
+    margin-top:6px;background:none;border:none;color:var(--muted);cursor:pointer;
+    font:inherit;font-size:13px;text-decoration:underline;padding:4px 0;
+  }
+  .reset:hover{color:var(--pine)}
+
+  /* ---------- hero pick ---------- */
+  .hero{
+    border:1px solid var(--line);border-radius:16px;background:var(--panel);
+    padding:18px 20px;margin-bottom:22px;box-shadow:var(--shadow);
+    display:flex;gap:18px;align-items:center;flex-wrap:wrap;
+  }
+  .hero .badge{
+    font-family:'Space Grotesk',sans-serif;font-size:12.5px;color:var(--muted);
+    font-weight:600;margin-bottom:4px;
+  }
+  .hero .pick{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:21px;letter-spacing:-.01em;line-height:1.15}
+  .hero .where{color:var(--muted);font-size:14px;margin-top:2px}
+  .hero .score{
+    margin-left:auto;text-align:right;padding-left:20px;border-left:1px solid var(--line);
+  }
+  .hero .score .big{
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:34px;line-height:1;color:var(--t1);
+  }
+  .hero .score .lbl{font-size:12px;color:var(--muted);margin-top:4px}
+
+  .count{font-size:13.5px;color:var(--muted);margin:0 2px 12px}
+
+  /* ---------- item rows ---------- */
+  .list{display:flex;flex-direction:column;gap:10px}
+  .item{
+    border:1px solid var(--line);border-radius:14px;background:var(--panel);
+    padding:14px 16px;display:grid;grid-template-columns:1fr auto;gap:4px 18px;
+    cursor:pointer;transition:border-color .12s,transform .08s;
+  }
+  .item:hover{border-color:#bcd0c1}
+  .item:active{transform:translateY(1px)}
+  .item.sel{border-color:var(--pine);box-shadow:inset 0 0 0 1px var(--pine)}
+  .item .name{font-weight:600;font-size:15.5px}
+  .item .rest{color:var(--muted);font-size:13.5px;margin-top:1px}
+  .item .rest .cuisine{opacity:.7}
+  .macros{
+    grid-column:1/2;display:flex;gap:16px;align-items:center;margin-top:8px;font-size:13.5px;
+  }
+  .macros span b{font-weight:600}
+  .macros .cal{color:var(--ink)}
+  .macros .pro{color:var(--pine)}
+  .macros .dist{color:var(--muted);margin-left:auto}
+  .eff{grid-column:2/3;grid-row:1/3;align-self:center;text-align:right;min-width:118px}
+  .eff .val{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;line-height:1}
+  .eff .unit{font-size:11px;color:var(--muted);margin-top:3px;white-space:nowrap}
+  .gauge{height:6px;border-radius:6px;background:var(--line);margin-top:8px;overflow:hidden}
+  .gauge>span{display:block;height:100%;border-radius:6px}
+
+  /* ---------- empty ---------- */
+  .empty{
+    border:1px dashed var(--line);border-radius:14px;padding:32px;text-align:center;color:var(--muted);
+  }
+  .empty b{color:var(--ink);display:block;font-size:16px;margin-bottom:4px;font-family:'Space Grotesk',sans-serif}
+
+  /* ---------- map bits ---------- */
+  .legend{
+    display:flex;gap:14px;flex-wrap:wrap;padding:10px clamp(16px,4vw,40px);
+    border-bottom:1px solid var(--line);background:var(--panel);font-size:12.5px;color:var(--muted);
+    align-items:center;
+  }
+  .legend .lg{display:inline-flex;align-items:center;gap:6px}
+  .legend .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+  .legend .metric{margin-right:auto;color:var(--ink);font-weight:500}
+  .pin{
+    font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:12px;color:#fff;
+    border-radius:8px;padding:3px 7px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25);
+    border:1.5px solid rgba(255,255,255,.85);transform:translate(-50%,-120%);
+  }
+  .pin .g{font-weight:500;font-size:10px;opacity:.9}
+  .pin.on{outline:2px solid var(--ink);outline-offset:1px}
+  .pin.nodata{background:#8A968C;font-weight:600}
+  /* live toggle */
+  .switch{display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:8px}
+  .switch input{position:absolute;opacity:0;width:0;height:0}
+  .switch .track{width:38px;height:22px;border-radius:999px;background:var(--line);position:relative;transition:background .15s;flex:none}
+  .switch .thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .15s}
+  .switch input:checked + .track{background:var(--pine)}
+  .switch input:checked + .track .thumb{transform:translateX(16px)}
+  .switch input:focus-visible + .track{outline:2px solid var(--pine);outline-offset:2px}
+  .swlabel{font-size:14px;font-weight:500}
+  .subnote{font-size:12px;color:var(--muted);margin:0 0 24px;line-height:1.45}
+  .livestatus{
+    padding:9px clamp(16px,4vw,40px);font-size:13px;color:var(--muted);
+    border-bottom:1px solid var(--line);background:var(--panel);
+    display:flex;align-items:center;gap:8px;min-height:38px;
+  }
+  .livestatus b{color:var(--pine)}
+  .sdot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+  .sdot.on{background:var(--t1)} .sdot.off{background:#B0553B} .sdot.demo{background:#8A968C}
+  .sdot.load{background:var(--pine);animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.3}}
+  @media (prefers-reduced-motion:reduce){.sdot.load{animation:none}}
+  /* search-this-area button */
+  .maparea{position:relative}
+  .areabtn{
+    position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:500;
+    background:#fff;color:var(--pine);border:1px solid var(--pine);border-radius:999px;
+    padding:8px 16px;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;
+    box-shadow:0 2px 12px rgba(0,0,0,.18);display:inline-flex;align-items:center;gap:7px;
+  }
+  .areabtn:hover{background:var(--pine-soft)}
+  .areabtn[hidden]{display:none}
+  .areabtn svg{width:14px;height:14px}
+  /* no-data panel */
+  .nodata-sec{margin-top:18px}
+  .nod-head{
+    width:100%;display:flex;align-items:center;gap:9px;background:none;
+    border:1px dashed var(--line);border-radius:12px;padding:11px 14px;cursor:pointer;
+    font:inherit;font-size:13.5px;color:var(--muted);text-align:left;
+  }
+  .nod-head:hover{border-color:#bcd0c1;color:var(--ink)}
+  .nod-count{
+    font-family:'Space Grotesk',sans-serif;font-weight:700;color:#6b756d;
+    background:#EAEEE8;border-radius:6px;padding:1px 8px;font-size:14px;
+  }
+  .nod-head .chev{margin-left:auto;transition:transform .15s}
+  .nod-head[aria-expanded="true"] .chev{transform:rotate(180deg)}
+  .nod-list{list-style:none;margin:8px 0 0;padding:0;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .nod-list li{display:flex;justify-content:space-between;gap:12px;padding:9px 14px;font-size:13.5px;border-top:1px solid var(--line);cursor:pointer}
+  .nod-list li:first-child{border-top:none}
+  .nod-list li:hover{background:var(--bg)}
+  .nod-list li em{color:var(--muted);font-style:normal;opacity:.85}
+  .nod-list li .num{color:var(--muted);flex:none}
+  .you{
+    width:16px;height:16px;border-radius:50%;background:#2f6ad9;border:3px solid #fff;
+    box-shadow:0 0 0 4px rgba(47,106,217,.25);cursor:grab;
+  }
+  .you:active{cursor:grabbing}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(31,157,87,.5)}100%{box-shadow:0 0 0 16px rgba(31,157,87,0)}}
+  .pulse{animation:pulse .9s ease-out 2}
+  @media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+
+  .note{font-size:12px;color:var(--muted);margin-top:26px;line-height:1.5;border-top:1px solid var(--line);padding-top:14px}
+  .hint{font-size:12.5px;color:var(--pine);background:var(--pine-soft);border-radius:10px;padding:9px 11px;margin:0 0 22px;line-height:1.4}
+  .hint b{font-weight:600}
+
+  /* ---------- responsive ---------- */
+  @media (max-width:840px){
+    .wrap{grid-template-columns:1fr}
+    .controls{border-right:none;border-bottom:1px solid var(--line)}
+    #map{height:260px}
+    .hero .score{margin-left:0;padding-left:0;border-left:none;width:100%;text-align:left;
+      border-top:1px solid var(--line);padding-top:12px;display:flex;align-items:baseline;gap:10px}
+    .hero .score .lbl{margin-top:0}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brandrow">
+    <div class="brand">Density<span class="dot">.</span></div>
+    <div class="tag">The most protein per calorie, near you right now. Every dish scored by how much protein it delivers per 100 calories.</div>
+  </div>
+  <div class="loc" id="loc">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+    <span id="locText">Finding you…</span>
+  </div>
+</header>
+
+<div class="legend">
+  <span class="metric">Pin score = best protein-per-100-cal dish at that spot</span>
+  <span class="lg"><span class="sw" style="background:var(--t1)"></span>9+ excellent</span>
+  <span class="lg"><span class="sw" style="background:var(--t2)"></span>6–9 good</span>
+  <span class="lg"><span class="sw" style="background:var(--t3)"></span>3–6 middling</span>
+  <span class="lg"><span class="sw" style="background:var(--t4)"></span>under 3 heavy</span>
+</div>
+
+<div class="wrap">
+  <aside class="controls">
+    <div class="ctl-h">Data source</div>
+    <label class="switch">
+      <input type="checkbox" id="liveToggle" checked>
+      <span class="track"><span class="thumb"></span></span>
+      <span class="swlabel">Live search (OpenStreetMap)</span>
+    </label>
+    <p class="subnote">On: real restaurants around your pin — only known chains carry nutrition. Off: the curated sample set.</p>
+
+    <div class="ctl-h">Rank by</div>
+    <div class="seg" id="sortSeg">
+      <button data-sort="eff" aria-pressed="true"><span class="k">★</span>Best protein per calorie</button>
+      <button data-sort="pro" aria-pressed="false"><span class="k">P</span>Most protein</button>
+      <button data-sort="cal" aria-pressed="false"><span class="k">↓</span>Fewest calories</button>
+      <button data-sort="near" aria-pressed="false"><span class="k">◎</span>Nearest to my pin</button>
+    </div>
+
+    <div class="field">
+      <label for="cal">Calorie ceiling <b><span id="calVal" class="num">600</span> cal</b></label>
+      <input type="range" id="cal" min="150" max="1000" step="10" value="600">
+    </div>
+
+    <div class="field">
+      <label for="pro">Protein floor <b><span id="proVal" class="num">20</span> g</b></label>
+      <input type="range" id="pro" min="0" max="50" step="1" value="20">
+    </div>
+
+    <div class="field">
+      <label for="dist">Search radius <b><span id="distVal" class="num">3.0</span> mi</b></label>
+      <input type="range" id="dist" min="0.5" max="10" step="0.5" value="3">
+    </div>
+
+    <p class="hint"><b>Set your spot:</b> click anywhere on the map, or drag the blue pin. Distances update as you move it.</p>
+
+    <div class="ctl-h">Search</div>
+    <div class="field search">
+      <input type="text" id="q" placeholder="Dish or restaurant…" autocomplete="off">
+      <button class="reset" id="reset">Reset everything</button>
+    </div>
+
+    <p class="note">Live OpenStreetMap feed for real nearby restaurants, matched against real published nutrition for ~40 national chains. Independents show on the map without data — the real coverage gap. Chain figures are representative and should be validated against official nutrition guides, or replaced with a nutrition API (e.g. Nutritionix), before production.</p>
+  </aside>
+
+  <div class="right">
+    <div class="maparea">
+      <div id="map"></div>
+      <button id="areaBtn" class="areabtn" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        Search this area
+      </button>
+    </div>
+    <div id="liveStatus" class="livestatus"></div>
+    <div class="results">
+      <div id="hero"></div>
+      <div class="count" id="count"></div>
+      <div class="list" id="list"></div>
+      <div id="nodata" class="nodata-sec"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- data: real chain items (calories, protein g). Values approximate for demo. ---------------- */
+const NUTRITION = [
+  {id:'chi',name:'Chipotle',cuisine:'Mexican',keys:['chipotle'],items:[
+    {name:'Double Chicken Bowl',cal:620,pro:68},
+    {name:'Chicken Burrito Bowl',cal:510,pro:46},
+    {name:'Chicken Salad, no rice',cal:350,pro:37},
+    {name:'Barbacoa Bowl',cal:520,pro:42},
+    {name:'Steak Bowl',cal:530,pro:40},
+    {name:'Sofritas Bowl',cal:470,pro:20},
+    {name:'Chips & Guacamole',cal:770,pro:9}]},
+  {id:'cav',name:'CAVA',cuisine:'Mediterranean',keys:['cava'],items:[
+    {name:'Grilled Chicken + Greens Bowl',cal:440,pro:42},
+    {name:'Chicken + Splendid Greens',cal:380,pro:38},
+    {name:'Chicken + RightRice Bowl',cal:560,pro:44},
+    {name:'Braised Lamb Bowl',cal:660,pro:36},
+    {name:'Harissa Falafel Bowl',cal:610,pro:18}]},
+  {id:'cfa',name:'Chick-fil-A',cuisine:'Chicken',keys:['chick-fil-a','chick fil a','chickfila'],items:[
+    {name:'Grilled Nuggets, 8 ct',cal:130,pro:25},
+    {name:'Grilled Nuggets, 12 ct',cal:200,pro:38},
+    {name:'Grilled Chicken Sandwich',cal:390,pro:28},
+    {name:'Cobb Salad w/ Grilled Chicken',cal:440,pro:40},
+    {name:'Spicy Chicken Sandwich',cal:450,pro:28},
+    {name:'Waffle Fries, medium',cal:420,pro:5}]},
+  {id:'swg',name:'Sweetgreen',cuisine:'Salads',keys:['sweetgreen'],items:[
+    {name:'Protein Plate',cal:505,pro:42},
+    {name:'Chicken Pesto Parm',cal:700,pro:41},
+    {name:'Harvest Bowl',cal:685,pro:30},
+    {name:'Shroomami',cal:545,pro:18}]},
+  {id:'sbx',name:'Starbucks',cuisine:'Cafe',keys:['starbucks'],items:[
+    {name:'Egg White & Red Pepper Bites',cal:170,pro:12},
+    {name:'Bacon & Gruyere Egg Bites',cal:300,pro:19},
+    {name:'Chicken & Quinoa Protein Bowl',cal:420,pro:27},
+    {name:'Turkey Bacon Egg White Sandwich',cal:230,pro:17},
+    {name:'Grande Latte, 2%',cal:190,pro:13},
+    {name:'Blueberry Muffin',cal:360,pro:6}]},
+  {id:'sub',name:'Subway',cuisine:'Sandwiches',keys:['subway'],items:[
+    {name:'Rotisserie Chicken, 6"',cal:350,pro:29},
+    {name:'Oven Roasted Turkey, 6"',cal:280,pro:19},
+    {name:'Steak & Cheese, 6"',cal:380,pro:26},
+    {name:'Tuna, 6"',cal:480,pro:20},
+    {name:'Veggie Delite, 6"',cal:200,pro:8}]},
+  {id:'pnd',name:'Panda Express',cuisine:'Chinese',keys:['panda express'],items:[
+    {name:'Grilled Teriyaki Chicken',cal:300,pro:33},
+    {name:'String Bean Chicken Breast',cal:190,pro:14},
+    {name:'Broccoli Beef',cal:150,pro:9},
+    {name:'Super Greens',cal:90,pro:6},
+    {name:'Kung Pao Chicken',cal:290,pro:16},
+    {name:'Orange Chicken',cal:490,pro:25}]},
+  {id:'wen',name:"Wendy's",cuisine:'Burgers',keys:['wendy'],items:[
+    {name:'Grilled Chicken Sandwich',cal:360,pro:34},
+    {name:'Chili, large',cal:330,pro:28},
+    {name:'Southwest Avocado Salad + Chicken',cal:570,pro:37},
+    {name:'Baconator',cal:950,pro:56},
+    {name:'Fries, medium',cal:420,pro:5}]},
+  {id:'mcd',name:"McDonald's",cuisine:'Burgers',keys:['mcdonald'],items:[
+    {name:'Egg McMuffin',cal:310,pro:17},
+    {name:'6-pc Chicken McNuggets',cal:250,pro:15},
+    {name:'Hamburger',cal:250,pro:12},
+    {name:'McChicken',cal:400,pro:14},
+    {name:'Big Mac',cal:590,pro:25},
+    {name:'Fries, medium',cal:320,pro:5}]},
+  {id:'tbl',name:'Taco Bell',cuisine:'Mexican',keys:['taco bell'],items:[
+    {name:'Chicken Power Menu Bowl',cal:470,pro:26},
+    {name:'Grilled Chicken Soft Taco',cal:180,pro:12},
+    {name:'Chicken Quesadilla',cal:510,pro:27},
+    {name:'Black Bean Crunchwrap',cal:500,pro:13}]},
+  {id:'pan',name:'Panera',cuisine:'Cafe',keys:['panera'],items:[
+    {name:'Green Goddess Cobb + Chicken',cal:530,pro:38},
+    {name:'Turkey Chili, cup',cal:250,pro:18},
+    {name:'Grilled Chicken Caesar Salad',cal:510,pro:34},
+    {name:'Ten Vegetable Soup',cal:120,pro:4},
+    {name:'Mac & Cheese, regular',cal:960,pro:33}]},
+  {id:'fvg',name:'Five Guys',cuisine:'Burgers',keys:['five guys'],items:[
+    {name:'Little Cheeseburger',cal:550,pro:28},
+    {name:'Little Hamburger',cal:480,pro:23},
+    {name:'Little Fries',cal:530,pro:8},
+    {name:'Fries, regular',cal:950,pro:15}]},
+  {id:'dnk',name:"Dunkin'",cuisine:'Cafe',keys:['dunkin'],items:[
+    {name:'Wake-Up Wrap, Egg & Cheese',cal:180,pro:7},
+    {name:'Sausage Egg & Cheese English Muffin',cal:470,pro:20},
+    {name:'Bacon Egg & Cheese Croissant',cal:530,pro:20},
+    {name:"Snackin' Bacon",cal:190,pro:12},
+    {name:'Latte, medium',cal:120,pro:6},
+    {name:'Glazed Donut',cal:240,pro:4}]},
+  {id:'bk',name:'Burger King',cuisine:'Burgers',keys:['burger king'],items:[
+    {name:'Whopper',cal:660,pro:28},
+    {name:'Grilled Chicken Sandwich',cal:470,pro:37},
+    {name:'Chicken Jr.',cal:450,pro:14},
+    {name:'8-pc Nuggets',cal:340,pro:17},
+    {name:'Impossible Whopper',cal:630,pro:25}]},
+  {id:'kfc',name:'KFC',cuisine:'Chicken',keys:['kfc','kentucky fried'],items:[
+    {name:'Grilled Chicken Breast',cal:210,pro:38},
+    {name:'Original Recipe Breast',cal:390,pro:39},
+    {name:'8-pc Nuggets',cal:340,pro:19},
+    {name:'Famous Bowl',cal:710,pro:26},
+    {name:'Coleslaw',cal:170,pro:1}]},
+  {id:'pop',name:'Popeyes',cuisine:'Chicken',keys:['popeyes'],items:[
+    {name:'Blackened Tenders (3)',cal:170,pro:29},
+    {name:'Handcrafted Tenders (3)',cal:340,pro:24},
+    {name:'Spicy Chicken Sandwich',cal:700,pro:28},
+    {name:'Red Beans & Rice',cal:230,pro:6}]},
+  {id:'jm',name:"Jersey Mike's",cuisine:'Sandwiches',keys:['jersey mike'],items:[
+    {name:'Turkey & Provolone (in a tub)',cal:330,pro:30},
+    {name:'Roast Beef (in a tub)',cal:330,pro:34},
+    {name:'Turkey Sub (regular)',cal:780,pro:45},
+    {name:'Chicken Philly (regular)',cal:820,pro:56}]},
+  {id:'jj',name:"Jimmy John's",cuisine:'Sandwiches',keys:['jimmy john'],items:[
+    {name:'Turkey Tom (8")',cal:510,pro:24},
+    {name:'Vito (8")',cal:590,pro:28},
+    {name:'Turkey Unwich (lettuce wrap)',cal:230,pro:19},
+    {name:'Roast Beef (8")',cal:500,pro:27}]},
+  {id:'ss',name:'Shake Shack',cuisine:'Burgers',keys:['shake shack'],items:[
+    {name:'ShackBurger, single',cal:530,pro:29},
+    {name:'Hamburger, single',cal:460,pro:25},
+    {name:'Chicken Shack',cal:590,pro:33},
+    {name:'Hot Dog',cal:340,pro:13}]},
+  {id:'ino',name:'In-N-Out',cuisine:'Burgers',keys:['in-n-out','in n out'],items:[
+    {name:'Hamburger',cal:390,pro:16},
+    {name:'Cheeseburger',cal:480,pro:22},
+    {name:'Protein-Style Cheeseburger',cal:330,pro:18},
+    {name:'Double-Double',cal:670,pro:37},
+    {name:'Fries',cal:370,pro:7}]},
+  {id:'rc',name:"Raising Cane's",cuisine:'Chicken',keys:['raising cane',"cane's"],items:[
+    {name:'3 Chicken Fingers',cal:330,pro:27},
+    {name:'Kids Combo (2 fingers)',cal:220,pro:18},
+    {name:"Cane's Sauce",cal:190,pro:1},
+    {name:'Crinkle Fries',cal:420,pro:6}]},
+  {id:'chl',name:"Chili's",cuisine:'American',keys:["chili's",'chilis'],items:[
+    {name:'6 oz Classic Sirloin',cal:240,pro:40},
+    {name:'Grilled Chicken Fajitas (chicken)',cal:380,pro:43},
+    {name:'Ancho Salmon',cal:620,pro:50}]},
+  {id:'app',name:"Applebee's",cuisine:'American',keys:['applebee'],items:[
+    {name:'7 oz House Sirloin',cal:330,pro:44},
+    {name:'Grilled Chicken Breast',cal:340,pro:40},
+    {name:'Fiesta Lime Chicken',cal:1250,pro:60}]},
+  {id:'og',name:'Olive Garden',cuisine:'Italian',keys:['olive garden'],items:[
+    {name:'Herb-Grilled Salmon',cal:460,pro:54},
+    {name:'Chicken Margherita',cal:560,pro:62},
+    {name:'Minestrone Soup',cal:110,pro:5},
+    {name:'Fettuccine Alfredo',cal:1010,pro:24}]},
+  {id:'dom',name:"Domino's",cuisine:'Pizza',keys:['domino'],items:[
+    {name:'Cheese (2 slices, medium)',cal:400,pro:16},
+    {name:'Pepperoni (2 slices)',cal:460,pro:20},
+    {name:'Buffalo Chicken (2 slices)',cal:440,pro:22}]},
+  {id:'ph',name:'Pizza Hut',cuisine:'Pizza',keys:['pizza hut'],items:[
+    {name:'Cheese (2 slices, hand-tossed)',cal:460,pro:22},
+    {name:'Pepperoni (2 slices)',cal:500,pro:22},
+    {name:'Traditional Wings (6)',cal:420,pro:48}]},
+  {id:'pj',name:"Papa John's",cuisine:'Pizza',keys:['papa john'],items:[
+    {name:'Cheese (2 slices)',cal:440,pro:18},
+    {name:'Pepperoni (2 slices)',cal:460,pro:20}]},
+  {id:'arb',name:"Arby's",cuisine:'Sandwiches',keys:['arby'],items:[
+    {name:'Roast Beef Classic',cal:360,pro:23},
+    {name:'Half Pound Roast Beef',cal:610,pro:42},
+    {name:'Roast Turkey Ranch & Bacon',cal:800,pro:45},
+    {name:'Curly Fries, medium',cal:410,pro:5}]},
+  {id:'son',name:'Sonic',cuisine:'American',keys:['sonic drive','sonic'],items:[
+    {name:'Jr. Burger',cal:330,pro:16},
+    {name:'Grilled Chicken Sandwich',cal:440,pro:29},
+    {name:'Corn Dog',cal:210,pro:6}]},
+  {id:'jib',name:'Jack in the Box',cuisine:'Burgers',keys:['jack in the box'],items:[
+    {name:'Jumbo Jack',cal:590,pro:23},
+    {name:'Chicken Fajita Pita',cal:330,pro:23},
+    {name:'Grilled Chicken Sandwich',cal:400,pro:28}]},
+  {id:'cj',name:"Carl's Jr.",cuisine:'Burgers',keys:["carl's jr",'carls jr'],items:[
+    {name:'Famous Star w/ Cheese',cal:670,pro:25},
+    {name:'Charbroiled Chicken Sandwich',cal:470,pro:34}]},
+  {id:'wha',name:'Whataburger',cuisine:'Burgers',keys:['whataburger'],items:[
+    {name:'Whataburger',cal:590,pro:28},
+    {name:'Grilled Chicken Sandwich',cal:430,pro:33}]},
+  {id:'cul',name:"Culver's",cuisine:'Burgers',keys:['culver'],items:[
+    {name:'ButterBurger Cheese, single',cal:500,pro:25},
+    {name:'Grilled Chicken Sandwich',cal:470,pro:34}]},
+  {id:'wing',name:'Wingstop',cuisine:'Chicken',keys:['wingstop'],items:[
+    {name:'Jumbo Wings (6, plain)',cal:470,pro:36},
+    {name:'Boneless Wings (5)',cal:350,pro:24},
+    {name:'Seasoned Fries, regular',cal:480,pro:6}]},
+  {id:'bww',name:'Buffalo Wild Wings',cuisine:'Chicken',keys:['buffalo wild wings'],items:[
+    {name:'Traditional Wings (6, plain)',cal:430,pro:36},
+    {name:'Naked Tenders (5)',cal:200,pro:38},
+    {name:'Boneless Wings (6)',cal:320,pro:26}]},
+  {id:'epl',name:'El Pollo Loco',cuisine:'Mexican',keys:['el pollo loco'],items:[
+    {name:'Flame-Grilled Skinless Breast',cal:180,pro:36},
+    {name:'Chicken Avocado Salad',cal:480,pro:40},
+    {name:'Double Chicken Bowl',cal:560,pro:50}]},
+  {id:'qdo',name:'Qdoba',cuisine:'Mexican',keys:['qdoba'],items:[
+    {name:'Chicken Bowl',cal:500,pro:40},
+    {name:'Grilled Chicken Protein Bowl',cal:380,pro:45}]},
+  {id:'moe',name:"Moe's",cuisine:'Mexican',keys:["moe's southwest"],items:[
+    {name:'Chicken Bowl',cal:490,pro:41},
+    {name:'Homewrecker Burrito',cal:830,pro:45}]},
+  {id:'del',name:'Del Taco',cuisine:'Mexican',keys:['del taco'],items:[
+    {name:'Grilled Chicken Soft Taco',cal:150,pro:9},
+    {name:'Del Taco',cal:160,pro:9},
+    {name:'Fresca Grilled Chicken Bowl',cal:420,pro:36}]},
+  {id:'fh',name:'Firehouse Subs',cuisine:'Sandwiches',keys:['firehouse'],items:[
+    {name:'Hook & Ladder (medium)',cal:590,pro:36},
+    {name:'Turkey Breast (medium)',cal:560,pro:34},
+    {name:'Smokehouse Beef & Cheddar',cal:810,pro:47}]},
+];
+
+// chains scattered on the map when live search is unavailable (offline demo)
+const DEMO_IDS = ['chi','cfa','cav','swg','sbx','pnd','wen','mcd','sub','pan','ss','kfc','wing','pop'];
+
+/* ---------------- helpers ---------------- */
+const eff = (it)=> it.pro / it.cal * 100;           // g protein per 100 cal
+const tierColor = (e)=> e>=9?'var(--t1)': e>=6?'var(--t2)': e>=3?'var(--t3)':'var(--t4)';
+const kmToMi = (km)=> km*0.621371;
+const esc = (s)=> (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function haversine(la1,lo1,la2,lo2){
+  const R=6371,t=Math.PI/180;
+  const dLa=(la2-la1)*t, dLo=(lo2-lo1)*t;
+  const a=Math.sin(dLa/2)**2 + Math.cos(la1*t)*Math.cos(la2*t)*Math.sin(dLo/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+
+// nutrition knowledge base, keyed by chain id
+const RMAP = Object.fromEntries(NUTRITION.map(r=>[r.id,r]));
+NUTRITION.forEach(r=>{ r.best = Math.max(...r.items.map(eff)); });
+
+// match a live restaurant name to a known chain by its name fragments
+function matchChain(name){
+  const n=(name||'').toLowerCase();
+  for(const c of NUTRITION){ if(c.keys.some(k=> n.includes(k))) return c.id; }
+  return null;
+}
+function prettyCuisine(c){
+  if(!c) return 'Restaurant';
+  const first=c.split(';')[0].replace(/_/g,' ').trim();
+  return first? first.charAt(0).toUpperCase()+first.slice(1) : 'Restaurant';
+}
+
+/* ---------------- state ---------------- */
+const state = { sort:'eff', maxCal:600, minPro:20, maxDist:3, q:'', selected:null, live:true, blocked:false };
+let map, youMarker, markers={}, origin=null, home=null, radiusCircle=null;
+let active=[], DISHES=[];              // active = restaurants currently on the map
+let searchTimer=null, searchToken=0;
+let areaBtn=null, lastSearchCenter=null, suppressAreaBtn=false, nodExpanded=false;
+
+// build the fixed demo restaurants as points scattered around a center
+function buildDemoActive(lat, lng){
+  return DEMO_IDS.map((id,i)=>{
+    const r=RMAP[id]; const b=(i*137.5)*Math.PI/180; const dist=0.3 + i*0.13;   // spread demo chains in a spiral
+    return {
+      id:r.id, name:r.name, cuisine:r.cuisine,
+      lat: lat + (dist*Math.cos(b))/111.32,
+      lng: lng + (dist*Math.sin(b))/(111.32*Math.cos(lat*Math.PI/180)),
+      items:r.items, best:r.best
+    };
+  });
+}
+
+/* ---------------- map + active set ---------------- */
+function initMap(lat, lng){
+  origin={lat,lng}; home={lat,lng};
+  map = L.map('map',{scrollWheelZoom:false}).setView([lat,lng],14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19, attribution:'© OpenStreetMap'
+  }).addTo(map);
+
+  radiusCircle = L.circle([lat,lng],{
+    radius:state.maxDist*1609.34, color:'#17513A', weight:1, opacity:.35,
+    fillColor:'#17513A', fillOpacity:.05, dashArray:'4 5', interactive:false
+  }).addTo(map);
+
+  youMarker = L.marker([lat,lng],{draggable:true,
+    icon:L.divIcon({className:'',html:'<div class="you"></div>',iconSize:[16,16],iconAnchor:[8,8]})}).addTo(map);
+  youMarker.bindTooltip('Drag me — or click the map — to search a new spot', {direction:'top',offset:[0,-10]});
+  youMarker.on('dragend', e=>{ const p=e.target.getLatLng(); setOrigin(p.lat,p.lng,true); });
+  map.on('click', e=> setOrigin(e.latlng.lat, e.latlng.lng, true));
+  map.on('moveend', onMoveEnd);
+
+  if(state.live){ state.blocked=false; setActive([]); setStatus('searching'); runLiveSearch(); }
+  else { setActive(buildDemoActive(lat,lng)); fitToMarkers(); setStatus(); }
+}
+
+function fitToMarkers(){
+  suppressAreaBtn=true;
+  const layers = Object.values(markers).concat(youMarker?[youMarker]:[]);
+  if(layers.length) map.fitBounds(L.featureGroup(layers).getBounds().pad(0.15));
+}
+
+// swap the set of restaurants on the map, rebuild dishes + markers, re-render
+function setActive(list){
+  active = list;
+  DISHES = [];
+  active.forEach(r=>{
+    if(!r.items) return;
+    r.best = Math.max(...r.items.map(eff));
+    r.items.forEach(it=> DISHES.push({...it, rid:r.id, rest:r.name, cuisine:r.cuisine, rlat:r.lat, rlng:r.lng, e:eff(it)}));
+  });
+  rebuildMarkers();
+  render();
+}
+
+function rebuildMarkers(){
+  Object.values(markers).forEach(m=> map.removeLayer(m));
+  markers = {};
+  active.forEach(r=>{
+    let html;
+    if(r.items){
+      const col = tierColor(r.best);
+      html = `<div class="pin" style="background:${col}">${r.best.toFixed(1)} <span class="g">g/100</span></div>`;
+    } else {
+      const label = r.name.length>16 ? r.name.slice(0,15)+'…' : r.name;
+      html = `<div class="pin nodata">${esc(label)}</div>`;
+    }
+    const m = L.marker([r.lat,r.lng],{icon:L.divIcon({className:'',html,iconSize:[0,0]})}).addTo(map);
+    m.on('click',()=>{ state.selected = state.selected===r.id? null : r.id; render(); });
+    m.bindTooltip(esc(r.name)+(r.items?'':' · no nutrition data'),{direction:'top',offset:[0,-14]});
+    markers[r.id]=m;
+  });
+}
+
+function setOrigin(lat, lng, custom){
+  origin={lat,lng};
+  if(youMarker) youMarker.setLatLng([lat,lng]);
+  if(radiusCircle) radiusCircle.setLatLng([lat,lng]);
+  state.selected=null;
+  document.getElementById('locText').textContent = custom ? 'Custom pin — searching this spot' : 'Using your location';
+  if(state.live) debounceSearch(); else render();
+}
+function updateRadius(){ if(radiusCircle) radiusCircle.setRadius(state.maxDist*1609.34); }
+
+/* ---------------- live search (OpenStreetMap Overpass) ---------------- */
+function debounceSearch(){
+  clearTimeout(searchTimer);
+  setStatus('searching');
+  searchTimer = setTimeout(runLiveSearch, 550);
+}
+
+async function runLiveSearch(opts){
+  if(!state.live) return;
+  const token = ++searchToken;
+  setStatus('searching');
+  let areaClause, center, areaMode=false;
+  if(opts && opts.bbox){
+    const [s,w,n,e] = opts.bbox;
+    areaClause = `${s},${w},${n},${e}`;               // Overpass bbox: south,west,north,east
+    center = opts.center; areaMode = true;
+  } else {
+    if(!origin) return;
+    const rM = Math.min(state.maxDist*1609.34, 16000);
+    areaClause = `around:${rM.toFixed(0)},${origin.lat},${origin.lng}`;
+    center = L.latLng(origin.lat, origin.lng);
+  }
+  try{
+    const results = await overpassQuery(areaClause);
+    if(token!==searchToken) return;                    // superseded
+    state.blocked = false;
+    lastSearchCenter = center;
+    if(areaBtn) areaBtn.hidden = true;
+    setCircleVisible(!areaMode);                        // the pin radius is meaningless when scouting elsewhere
+    if(!results.length){ setActive([]); setStatus('empty'); return; }
+    const withData = results.filter(r=>r.items).length;
+    setActive(results);
+    if(!areaMode) fitToMarkers();                      // frame the real pins around you
+    setStatus(areaMode?'area':'ok', results.length, withData);
+  }catch(err){
+    if(token!==searchToken) return;
+    state.blocked = true;                              // preview blocked the request — show NO fake pins
+    if(areaBtn) areaBtn.hidden = true;
+    setCircleVisible(true);
+    setActive([]);
+    setStatus('blocked');
+  }
+}
+
+// ── OPTIONAL: live per-item nutrition for ANY restaurant (independents included) ──
+// The only real way to cover non-chains is a nutrition API. This is where it plugs in.
+// It can't run in this preview (needs a secret key + a tiny server proxy so the key
+// isn't exposed in the browser), but the shape is ready:
+//
+// async function fetchNutrition(name){
+//   const res = await fetch('/api/nutrition?q='+encodeURIComponent(name)); // your proxy -> Nutritionix
+//   if(!res.ok) return null;
+//   const j = await res.json();               // { items:[{name, cal, pro}, ...] }
+//   return j.items && j.items.length ? j.items : null;
+// }
+// Then in the results mapper below, for a restaurant with items===null, call fetchNutrition(name)
+// and, if it returns rows, treat that restaurant exactly like a matched chain.
+
+// several public Overpass mirrors — we try them in order so one being down/rate-limited isn't fatal
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter'
+];
+async function overpassQuery(areaClause){
+  const q = `[out:json][timeout:25];(`
+    + `node["amenity"~"^(restaurant|fast_food|cafe)$"](${areaClause});`
+    + `way["amenity"~"^(restaurant|fast_food|cafe)$"](${areaClause});`
+    + `);out center 90;`;
+  const url = '?data='+encodeURIComponent(q);
+  let lastErr;
+  for(const base of OVERPASS_ENDPOINTS){
+    const ctrl = new AbortController();
+    const to = setTimeout(()=>ctrl.abort(), 25000);
+    try{
+      const res = await fetch(base+url, {signal:ctrl.signal, headers:{'Accept':'application/json'}});
+      clearTimeout(to);
+      if(!res.ok){ lastErr = new Error('http '+res.status); continue; }
+      const j = await res.json();
+      return parseOverpass(j);
+    }catch(e){ clearTimeout(to); lastErr = e; }
+  }
+  throw lastErr || new Error('all endpoints failed');
+}
+function parseOverpass(j){
+  const seen=new Set(), out=[];
+  (j.elements||[]).forEach((el,i)=>{
+    const la = el.lat ?? el.center?.lat, lo = el.lon ?? el.center?.lon;
+    const name = el.tags && el.tags.name;
+    if(!name || la==null) return;
+    const key = name+'@'+la.toFixed(4)+lo.toFixed(4);
+    if(seen.has(key)) return; seen.add(key);
+    const cid = matchChain(name), chain = cid? RMAP[cid] : null;
+    out.push({
+      id:'osm'+i, name,
+      cuisine: chain? chain.cuisine : prettyCuisine(el.tags.cuisine || el.tags.amenity),
+      lat:la, lng:lo,
+      items: chain? chain.items : null
+    });
+  });
+  return out;
+}
+
+function searchThisArea(){
+  if(!map || !state.live) return;
+  const b = map.getBounds();
+  runLiveSearch({bbox:[b.getSouth(),b.getWest(),b.getNorth(),b.getEast()], center:map.getCenter()});
+}
+
+function onMoveEnd(){
+  if(!areaBtn) return;
+  if(!state.live){ areaBtn.hidden=true; return; }
+  if(suppressAreaBtn){ suppressAreaBtn=false; return; }   // ignore programmatic pans
+  if(!lastSearchCenter) return;
+  const c = map.getCenter();
+  const moved = haversine(c.lat,c.lng,lastSearchCenter.lat,lastSearchCenter.lng);
+  areaBtn.hidden = !(moved > 0.2);                        // show once the user has panned ~200m+
+}
+
+function panTo(lat,lng,z){ suppressAreaBtn=true; map.setView([lat,lng], z||15, {animate:true}); }
+function pulse(rid){
+  const pin = markers[rid]?.getElement()?.querySelector('.pin');
+  if(pin){ pin.classList.remove('pulse'); void pin.offsetWidth; pin.classList.add('pulse'); }
+}
+function setCircleVisible(v){ if(radiusCircle) radiusCircle.setStyle({opacity:v?.35:0, fillOpacity:v?.05:0}); }
+
+function setStatus(kind, total, withData){
+  const el=document.getElementById('liveStatus'); if(!el) return;
+  if(!state.live){ el.innerHTML = `<span class="sdot demo"></span> Sample data — live search off`; return; }
+  el.innerHTML = ({
+    searching:`<span class="sdot load"></span> Searching OpenStreetMap near your pin…`,
+    ok:`<span class="sdot on"></span> ${total} places nearby · <b>${withData}</b> with nutrition data`,
+    area:`<span class="sdot on"></span> Showing this area · ${total} places · <b>${withData}</b> with nutrition`,
+    empty:`<span class="sdot off"></span> No restaurants found here — widen the radius or move the pin`,
+    blocked:`<span class="sdot off"></span> Couldn't reach live map data from this preview — open the file in your browser for real pins.`,
+  })[kind] || '';
+}
+
+/* ---------------- rendering ---------------- */
+function compute(){
+  const o = origin||home||{lat:0,lng:0};
+  let d = DISHES.map(x=>({...x, dist: haversine(o.lat,o.lng,x.rlat,x.rlng)}));
+  d = d.filter(x=> x.cal<=state.maxCal && x.pro>=state.minPro);
+  if(state.selected) d = d.filter(x=> x.rid===state.selected);        // picking a pin shows its whole menu
+  else if(!state.live) d = d.filter(x=> kmToMi(x.dist) <= state.maxDist);  // demo mode honors the radius slider; live results are already bounded by the query
+  if(state.q){
+    const q = state.q.toLowerCase();
+    d = d.filter(x=> x.name.toLowerCase().includes(q) || x.rest.toLowerCase().includes(q));
+  }
+  const cmp = {
+    eff:(a,b)=> b.e-a.e || a.cal-b.cal,
+    pro:(a,b)=> b.pro-a.pro || b.e-a.e,
+    cal:(a,b)=> a.cal-b.cal || b.pro-a.pro,
+    near:(a,b)=> a.dist-b.dist || b.e-a.e,
+  }[state.sort];
+  return d.sort(cmp);
+}
+
+function render(){
+  const res = compute();
+  const hero = document.getElementById('hero');
+  const countEl = document.getElementById('count');
+  const list = document.getElementById('list');
+  const nodataEl = document.getElementById('nodata');
+
+  // selection outline on pins
+  Object.entries(markers).forEach(([id,m])=>{
+    const el = m.getElement()?.querySelector('.pin');
+    if(el) el.classList.toggle('on', state.selected===id);
+  });
+
+  // selected a restaurant we have no nutrition for
+  const selR = state.selected ? active.find(r=>r.id===state.selected) : null;
+  if(selR && !selR.items){
+    hero.style.display='none';
+    countEl.textContent = selR.name;
+    list.innerHTML = `<div class="empty"><b>No nutrition data for ${esc(selR.name)}.</b>This is the gap a production build fills — chain menus plus estimates for independents. Tap a scored pin to see its ranking.</div>`;
+    nodataEl.innerHTML='';
+    return;
+  }
+
+  // hero — best pick
+  if(res.length){
+    const t = res[0];
+    hero.innerHTML = `
+      <div>
+        <div class="badge">Top pick right now</div>
+        <div class="pick">${esc(t.name)}</div>
+        <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein</div>
+      </div>
+      <div class="score">
+        <div class="big num">${t.e.toFixed(1)}</div>
+        <div class="lbl">g protein / 100 cal</div>
+      </div>`;
+    hero.style.display='flex';
+  } else { hero.style.display='none'; }
+
+  // count line
+  const selName = selR ? selR.name : null;
+  countEl.textContent = res.length
+    ? `${res.length} dish${res.length>1?'es':''}${selName?` at ${esc(selName)}`:' nearby'} clear your filters`
+    : '';
+
+  // scored dish list
+  if(!res.length){
+    if(state.blocked){
+      list.innerHTML = `<div class="empty"><b>Couldn't load live restaurants here.</b>This preview sandbox is blocking the map-data request, so no real pins can load. Download the file and open it in your browser, or deploy it, to pull real restaurants around your pin. The toggle switches to a clearly-labelled sample set.</div>`;
+    } else {
+      list.innerHTML = `<div class="empty"><b>Nothing scored here yet.</b>${state.live?'Try widening the radius, easing the calorie and protein limits, or searching a busier area.':'Drag your pin closer, widen the radius, or ease the calorie and protein limits.'}</div>`;
+    }
+  } else {
+    const scale = 18; // gauge full at 18 g/100cal
+    list.innerHTML = res.map(x=>{
+      const col = tierColor(x.e);
+      const w = Math.min(100, x.e/scale*100);
+      return `<div class="item ${state.selected===x.rid?'sel':''}" data-rid="${x.rid}">
+        <div>
+          <div class="name">${esc(x.name)}</div>
+          <div class="rest">${esc(x.rest)} <span class="cuisine">· ${esc(x.cuisine)}</span></div>
+        </div>
+        <div class="eff">
+          <div class="val" style="color:${col}">${x.e.toFixed(1)}</div>
+          <div class="unit">g protein / 100 cal</div>
+        </div>
+        <div class="macros">
+          <span class="cal"><b class="num">${x.cal}</b> cal</span>
+          <span class="pro"><b class="num">${x.pro}</b> g protein</span>
+          <span class="dist num">${kmToMi(x.dist).toFixed(1)} mi</span>
+        </div>
+        <div class="gauge" style="grid-column:1/3"><span style="width:${w}%;background:${col}"></span></div>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.item').forEach(el=>{
+      el.addEventListener('click',()=>{
+        const rid = el.dataset.rid, r = active.find(x=>x.id===rid);
+        if(map && r){ panTo(r.lat,r.lng,15); pulse(rid); }
+      });
+    });
+  }
+
+  renderNoData(nodataEl);
+}
+
+function renderNoData(el){
+  let nod = active.filter(r=> !r.items);
+  if(state.q){ const q=state.q.toLowerCase(); nod = nod.filter(r=> r.name.toLowerCase().includes(q)); }
+  if(!nod.length){ el.innerHTML=''; return; }
+  const o = origin||home||{lat:0,lng:0};
+  nod.forEach(r=> r._d = haversine(o.lat,o.lng,r.lat,r.lng));
+  nod.sort((a,b)=> a._d-b._d);
+  const rows = nod.map(r=>
+    `<li data-rid="${r.id}"><span>${esc(r.name)} <em>· ${esc(r.cuisine)}</em></span><span class="num">${kmToMi(r._d).toFixed(1)} mi</span></li>`
+  ).join('');
+  el.innerHTML = `
+    <button class="nod-head" id="nodHead" aria-expanded="${nodExpanded}">
+      <span class="nod-count num">${nod.length}</span> nearby without nutrition data
+      <span class="chev">▾</span>
+    </button>
+    <ul class="nod-list" ${nodExpanded?'':'hidden'}>${rows}</ul>`;
+  el.querySelector('#nodHead').addEventListener('click',()=>{ nodExpanded=!nodExpanded; render(); });
+  el.querySelectorAll('.nod-list li').forEach(li=>{
+    li.addEventListener('click',()=>{
+      const rid=li.dataset.rid, r=active.find(x=>x.id===rid);
+      if(map && r){ panTo(r.lat,r.lng,16); pulse(rid); }
+    });
+  });
+}
+
+/* ---------------- controls wiring ---------------- */
+document.getElementById('sortSeg').addEventListener('click',e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  state.sort = b.dataset.sort;
+  document.querySelectorAll('#sortSeg button').forEach(x=>x.setAttribute('aria-pressed', x===b));
+  render();
+});
+const calEl=document.getElementById('cal'), proEl=document.getElementById('pro'), qEl=document.getElementById('q');
+calEl.addEventListener('input',()=>{ state.maxCal=+calEl.value; document.getElementById('calVal').textContent=calEl.value; render(); });
+proEl.addEventListener('input',()=>{ state.minPro=+proEl.value; document.getElementById('proVal').textContent=proEl.value; render(); });
+qEl.addEventListener('input',()=>{ state.q=qEl.value.trim(); render(); });
+const distEl=document.getElementById('dist');
+distEl.addEventListener('input',()=>{
+  state.maxDist=+distEl.value; document.getElementById('distVal').textContent=(+distEl.value).toFixed(1);
+  updateRadius();
+  if(state.live) debounceSearch(); else render();   // radius changes the live query too
+});
+areaBtn=document.getElementById('areaBtn');
+areaBtn.addEventListener('click', searchThisArea);
+const liveToggle=document.getElementById('liveToggle');
+liveToggle.addEventListener('change',()=>{
+  state.live = liveToggle.checked;
+  state.selected = null;
+  lastSearchCenter = null; areaBtn.hidden = true;
+  if(state.live){ state.blocked=false; setStatus('searching'); runLiveSearch(); }
+  else { setCircleVisible(true); setActive(buildDemoActive(origin.lat, origin.lng)); setStatus(); fitToMarkers(); }
+});
+document.getElementById('reset').addEventListener('click',()=>{
+  state.sort='eff'; state.maxCal=600; state.minPro=20; state.maxDist=3; state.q=''; state.selected=null;
+  calEl.value=600; proEl.value=20; distEl.value=3; qEl.value='';
+  document.getElementById('calVal').textContent='600'; document.getElementById('proVal').textContent='20';
+  document.getElementById('distVal').textContent='3.0';
+  document.querySelectorAll('#sortSeg button').forEach(x=>x.setAttribute('aria-pressed', x.dataset.sort==='eff'));
+  updateRadius();
+  if(map && home) panTo(home.lat,home.lng,14);        // suppresses the area button
+  if(home) setOrigin(home.lat,home.lng,false);        // moves pin home; re-searches if live
+});
+
+/* ---------------- boot: geolocation ---------------- */
+function boot(lat,lng,real){
+  document.getElementById('locText').textContent = real
+    ? 'Using your location'
+    : 'Location off — showing a New York sample';
+  initMap(lat,lng);
+}
+if(navigator.geolocation){
+  navigator.geolocation.getCurrentPosition(
+    p=> boot(p.coords.latitude, p.coords.longitude, true),
+    ()=> boot(40.7128, -74.0060, false),
+    {timeout:8000}
+  );
+} else {
+  boot(40.7128,-74.0060,false);
+}
+</script>
+</body>
+</html>
