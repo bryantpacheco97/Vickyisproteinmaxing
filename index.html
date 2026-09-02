@@ -900,6 +900,11 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .item:active{transform:translateY(1px)}
   .item.sel{border-color:var(--pine);box-shadow:inset 0 0 0 1px var(--pine)}
   .item .name{font-weight:600;font-size:15.5px}
+  .est-tag{
+    display:inline-block;font-family:'Inter',sans-serif;font-weight:600;font-size:10px;
+    letter-spacing:.03em;text-transform:uppercase;color:var(--muted);
+    border:1px dashed var(--line);border-radius:5px;padding:1px 5px;vertical-align:middle;
+  }
   .item .rest{color:var(--muted);font-size:13.5px;margin-top:1px}
   .item .rest .cuisine{opacity:.7}
   .macros{
@@ -947,6 +952,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .pin .g{font-weight:500;font-size:10px;opacity:.9}
   .pin.on{outline:2px solid var(--ink);outline-offset:1px}
   .pin.nodata{background:#8A968C;font-weight:600}
+  .pin.est{border-style:dashed;border-color:rgba(255,255,255,.75)}
   /* live toggle */
   .switch{display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:8px}
   .switch input{position:absolute;opacity:0;width:0;height:0}
@@ -1112,6 +1118,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <span class="lg"><span class="sw" style="background:var(--t2)"></span>6–9 good</span>
   <span class="lg"><span class="sw" style="background:var(--t3)"></span>3–6 middling</span>
   <span class="lg"><span class="sw" style="background:var(--t4)"></span>under 3 heavy</span>
+  <span class="lg">~ dashed pin = cuisine-average estimate, not that restaurant's real menu</span>
 </div>
 
 <div class="wrap">
@@ -1122,7 +1129,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <span class="track"><span class="thumb"></span></span>
       <span class="swlabel">Live search (OpenStreetMap)</span>
     </label>
-    <p class="subnote">On: real restaurants around your pin — only known chains carry nutrition. Off: the curated sample set.</p>
+    <p class="subnote">On: real restaurants around your pin — known chains show verified nutrition, everything else gets a cuisine-average estimate (dashed pin). Off: the curated sample set.</p>
 
     <div class="ctl-h">Rank by</div>
     <div class="seg" id="sortSeg">
@@ -1156,7 +1163,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button class="reset" id="reset">Reset everything</button>
     </div>
 
-    <p class="note">Live OpenStreetMap feed for real nearby restaurants, matched against real published nutrition for ~50 national chains plus NYC-area chains (Just Salad, Chopt, DIG, Pret A Manger, The Halal Guys, &amp;pizza, Fresh&amp;co, Bluestone Lane, Fields Good Chicken). Independents show on the map without data — the real coverage gap that only a nutrition API (e.g. Nutritionix) fully closes. Chain figures are representative; validate against official nutrition guides before production. Prices are representative national averages (menu.com / chain nutrition-portal listings) and vary by location and over time — a live pricing API would be needed to track them exactly. Dish icons show food type, not real photos — per-dish photography needs a licensed image source.</p>
+    <p class="note">Live OpenStreetMap feed for real nearby restaurants. Two data tiers: solid pins are ~50 national chains plus NYC-area chains (Just Salad, Chopt, DIG, Pret A Manger, The Halal Guys, &amp;pizza, Fresh&amp;co, Bluestone Lane, Fields Good Chicken) with real published nutrition. Dashed "avg" pins are everything else — independents and unmatched chains — scored on cuisine-average typical-dish nutrition (from public data, by OpenStreetMap cuisine tag), not that restaurant's actual menu; a nutrition API (e.g. Nutritionix) is the only way to get their real dish-level data. Chain figures are representative; validate against official nutrition guides before production. Prices are representative national averages (menu.com / chain nutrition-portal listings) and vary by location and over time — a live pricing API would be needed to track them exactly. Dish icons show food type, not real photos — per-dish photography needs a licensed image source.</p>
   </aside>
 
   <div class="right">
@@ -1462,6 +1469,20 @@ const NUTRITION = [
   {id:'fgc',name:'Fields Good Chicken',cuisine:'Chicken',keys:['fields good chicken'],items:[
     {name:'Qtr Leg & Thigh',cal:230,pro:31,usd:8.95},
     {name:'Fields Good Cobb Salad',cal:780,pro:60,usd:12.95}]},
+  {id:'smb',name:'Smashburger',cuisine:'Burgers',keys:['smashburger'],items:[
+    {name:'Classic Smash',cal:630,pro:30,usd:8.99},
+    {name:'Double Classic Smash',cal:970,pro:54,usd:11.99}]},
+  {id:'bfi',name:'BurgerFi',cuisine:'Burgers',keys:['burgerfi'],items:[
+    {name:'Grilled Chicken Sandwich',cal:525,pro:31,usd:10.99},
+    {name:'BurgerFi Single Burger',cal:465,pro:24,usd:9.49},
+    {name:'VegeFi Burger',cal:525,pro:19,usd:9.99}]},
+  {id:'frd',name:"Freddy's",cuisine:'Burgers',keys:["freddy's frozen custard","freddys frozen custard"],items:[
+    {name:'Single Steakburger, no cheese',cal:380,pro:24,usd:6.49},
+    {name:'Double Steakburger, no cheese',cal:570,pro:43,usd:8.49},
+    {name:'Triple Steakburger, no cheese',cal:760,pro:63,usd:10.49}]},
+  {id:'tsc',name:'Tropical Smoothie Cafe',cuisine:'Smoothies',keys:['tropical smoothie'],items:[
+    {name:'PB Protein Crunch Bowl',cal:690,pro:32,usd:10.99},
+    {name:'Santa Fe Chicken Quesadilla',cal:600,pro:35,usd:9.49}]},
 ];
 
 // chains scattered on the map when live search is unavailable (offline demo)
@@ -1559,10 +1580,125 @@ function matchChain(name){
   for(const c of NUTRITION){ if(c.keys.some(k=> n.includes(k))) return c.id; }
   return null;
 }
-function prettyCuisine(c){
-  if(!c) return 'Restaurant';
-  const first=c.split(';')[0].replace(/_/g,' ').trim();
-  return first? first.charAt(0).toUpperCase()+first.slice(1) : 'Restaurant';
+// ---- cuisine-average fallback, for live restaurants that don't match a known chain ----
+// Independents can't be looked up individually (no nutrition API in this preview — see
+// the note near overpassQuery), so instead of leaving them blank we estimate from public
+// average/typical nutrition figures for that cuisine. Every item here is explicitly
+// marked estimated:true and rendered with an "avg" badge — never presented as that
+// restaurant's real, specific menu.
+const CUISINE_AVG = {
+  italian:{label:'Italian',items:[
+    {name:'Chicken Marsala (typical)',cal:520,pro:42,usd:17.95},
+    {name:'Pasta with Marinara (typical)',cal:650,pro:18,usd:14.95},
+    {name:'Chicken Parmesan (typical)',cal:780,pro:48,usd:18.95}]},
+  mexican:{label:'Mexican',items:[
+    {name:'Chicken Fajitas (typical)',cal:520,pro:38,usd:15.95},
+    {name:'Beef Burrito (typical)',cal:700,pro:28,usd:11.95},
+    {name:'Chicken Taco Plate, 3 (typical)',cal:480,pro:32,usd:12.95}]},
+  chinese:{label:'Chinese',items:[
+    {name:'Steamed Chicken & Broccoli (typical)',cal:320,pro:32,usd:12.95},
+    {name:'Beef & Broccoli (typical)',cal:450,pro:30,usd:13.95},
+    {name:"General Tso's Chicken (typical)",cal:650,pro:25,usd:13.95}]},
+  japanese:{label:'Japanese',items:[
+    {name:'California Roll, 8pc (typical)',cal:280,pro:9,usd:8.95},
+    {name:'Chicken Teriyaki (typical)',cal:480,pro:38,usd:15.95},
+    {name:'Salmon Sushi Dinner, 3 rolls (typical)',cal:520,pro:34,usd:19.95}]},
+  thai:{label:'Thai',items:[
+    {name:'Pad Thai with Chicken (typical)',cal:650,pro:28,usd:14.95},
+    {name:'Chicken Green Curry (typical)',cal:450,pro:30,usd:15.95},
+    {name:'Grilled Chicken Satay (typical)',cal:380,pro:34,usd:12.95}]},
+  indian:{label:'Indian',items:[
+    {name:'Chicken Tikka Masala (typical)',cal:550,pro:32,usd:15.95},
+    {name:'Tandoori Chicken (typical)',cal:380,pro:40,usd:14.95},
+    {name:'Chana Masala (typical)',cal:380,pro:16,usd:12.95}]},
+  american:{label:'American',items:[
+    {name:'Grilled Chicken Sandwich (typical)',cal:520,pro:34,usd:13.95},
+    {name:'Classic Cheeseburger (typical)',cal:700,pro:34,usd:13.95},
+    {name:'Grilled Salmon Plate (typical)',cal:480,pro:38,usd:19.95}]},
+  pizza:{label:'Pizza',items:[
+    {name:'Cheese Pizza, 2 slices (typical)',cal:480,pro:20,usd:5.50},
+    {name:'Pepperoni Pizza, 2 slices (typical)',cal:520,pro:22,usd:5.95}]},
+  burger:{label:'Burgers',items:[
+    {name:'Classic Burger (typical)',cal:650,pro:32,usd:11.95},
+    {name:'Grilled Chicken Burger (typical)',cal:550,pro:36,usd:12.95}]},
+  seafood:{label:'Seafood',items:[
+    {name:'Grilled Salmon (typical)',cal:420,pro:40,usd:21.95},
+    {name:'Fish & Chips (typical)',cal:780,pro:32,usd:16.95},
+    {name:'Shrimp Scampi (typical)',cal:520,pro:34,usd:19.95}]},
+  steak_house:{label:'Steakhouse',items:[
+    {name:'8oz Sirloin Steak (typical)',cal:440,pro:60,usd:22.95},
+    {name:'10oz Ribeye Steak (typical)',cal:700,pro:56,usd:27.95}]},
+  greek:{label:'Greek',items:[
+    {name:'Chicken Souvlaki Plate (typical)',cal:520,pro:42,usd:15.95},
+    {name:'Gyro Plate (typical)',cal:650,pro:34,usd:13.95},
+    {name:'Greek Salad with Chicken (typical)',cal:420,pro:36,usd:13.95}]},
+  mediterranean:{label:'Mediterranean',items:[
+    {name:'Chicken Shawarma Plate (typical)',cal:700,pro:40,usd:14.95},
+    {name:'Falafel Plate (typical)',cal:520,pro:18,usd:12.95},
+    {name:'Grilled Kebab Plate (typical)',cal:550,pro:42,usd:16.95}]},
+  korean:{label:'Korean',items:[
+    {name:'Beef Bulgogi (typical)',cal:520,pro:34,usd:16.95},
+    {name:'Korean Fried Chicken (typical)',cal:650,pro:32,usd:14.95},
+    {name:'Bibimbap with Beef (typical)',cal:600,pro:30,usd:15.95}]},
+  vietnamese:{label:'Vietnamese',items:[
+    {name:'Beef Pho (typical)',cal:450,pro:28,usd:13.95},
+    {name:'Banh Mi Sandwich (typical)',cal:450,pro:20,usd:9.95}]},
+  sandwich:{label:'Sandwiches',items:[
+    {name:'Turkey Sandwich (typical)',cal:450,pro:28,usd:9.95},
+    {name:'Grilled Chicken Sandwich (typical)',cal:480,pro:34,usd:10.95}]},
+  breakfast:{label:'Breakfast & Cafe',items:[
+    {name:'2-Egg Breakfast Plate (typical)',cal:450,pro:22,usd:10.95},
+    {name:'Veggie Omelette (typical)',cal:380,pro:24,usd:11.95}]},
+  bbq:{label:'BBQ',items:[
+    {name:'BBQ Pulled Pork Plate (typical)',cal:600,pro:32,usd:13.95},
+    {name:'BBQ Chicken Plate (typical)',cal:520,pro:42,usd:14.95},
+    {name:'Beef Brisket Plate (typical)',cal:620,pro:40,usd:16.95}]},
+  chicken:{label:'Chicken',items:[
+    {name:'Fried Chicken, 2pc (typical)',cal:510,pro:38,usd:9.95},
+    {name:'Grilled Chicken Plate (typical)',cal:420,pro:42,usd:11.95}]},
+  asian:{label:'Asian',items:[
+    {name:'Chicken Stir-Fry (typical)',cal:480,pro:34,usd:13.95},
+    {name:'Fried Rice with Chicken (typical)',cal:550,pro:22,usd:12.95}]},
+  vegetarian:{label:'Vegetarian',items:[
+    {name:'Veggie Buddha Bowl (typical)',cal:450,pro:16,usd:12.95},
+    {name:'Tofu Stir-Fry (typical)',cal:420,pro:20,usd:12.95}]},
+  french:{label:'French',items:[
+    {name:'Grilled Chicken Breast (typical)',cal:420,pro:40,usd:18.95},
+    {name:'Steak Frites (typical)',cal:700,pro:45,usd:24.95}]},
+  default:{label:'Restaurant',items:[
+    {name:'Grilled Chicken Entree (typical)',cal:480,pro:38,usd:16.95},
+    {name:'House Salad with Chicken (typical)',cal:420,pro:32,usd:13.95},
+    {name:'Pasta Dish (typical)',cal:650,pro:20,usd:15.95}]},
+};
+Object.values(CUISINE_AVG).forEach(c=> c.items.forEach(it=> it.estimated=true));
+
+// raw OSM cuisine= tag values (and amenity as a last resort) -> a CUISINE_AVG bucket
+const CUISINE_ALIAS = {
+  italian:'italian', pizza:'pizza', mexican:'mexican', chinese:'chinese',
+  japanese:'japanese', sushi:'japanese', ramen:'japanese',
+  thai:'thai', indian:'indian',
+  american:'american', diner:'american', soul_food:'american', pub:'american', bar:'american', fast_food:'american',
+  burger:'burger', seafood:'seafood', fish:'seafood',
+  steak_house:'steak_house', steak:'steak_house',
+  greek:'greek',
+  mediterranean:'mediterranean', spanish:'mediterranean', tapas:'mediterranean',
+  turkish:'mediterranean', lebanese:'mediterranean', middle_eastern:'mediterranean',
+  korean:'korean', vietnamese:'vietnamese',
+  sandwich:'sandwich', sub:'sandwich', deli:'sandwich',
+  breakfast:'breakfast', cafe:'breakfast', coffee_shop:'breakfast', bakery:'breakfast',
+  bbq:'bbq', barbecue:'bbq',
+  chicken:'chicken', fried_chicken:'chicken',
+  asian:'asian', noodle:'asian', international:'asian',
+  vegetarian:'vegetarian', vegan:'vegetarian',
+  french:'french',
+};
+// best-guess cuisine average for a restaurant with no chain match — always returns
+// something (falling back to a generic "Restaurant" bucket) since even a rough
+// estimate beats no data at all for an independent we can't look up individually
+function cuisineAvg(rawCuisine, amenity){
+  const first = (rawCuisine||'').toLowerCase().split(';')[0].trim();
+  const bucket = CUISINE_ALIAS[first] || (amenity==='cafe' ? 'breakfast' : null);
+  return CUISINE_AVG[bucket] || CUISINE_AVG.default;
 }
 
 /* ---------------- state ---------------- */
@@ -1635,14 +1771,16 @@ function rebuildMarkers(){
     let html;
     if(r.items){
       const col = tierColor(r.best);
-      html = `<div class="pin" style="background:${col}">${r.best.toFixed(1)} <span class="g">g/100</span></div>`;
+      const cls = r.estimated ? 'pin est' : 'pin';
+      html = `<div class="${cls}" style="background:${col}">${r.estimated?'~':''}${r.best.toFixed(1)} <span class="g">g/100</span></div>`;
     } else {
       const label = r.name.length>16 ? r.name.slice(0,15)+'…' : r.name;
       html = `<div class="pin nodata">${esc(label)}</div>`;
     }
     const m = L.marker([r.lat,r.lng],{icon:L.divIcon({className:'',html,iconSize:[0,0]})}).addTo(map);
     m.on('click',()=>{ state.selected = state.selected===r.id? null : r.id; render(); });
-    m.bindTooltip(esc(r.name)+(r.items?'':' · no nutrition data'),{direction:'top',offset:[0,-14]});
+    const tip = r.items ? (r.estimated ? ' · cuisine-average estimate' : '') : ' · no nutrition data';
+    m.bindTooltip(esc(r.name)+tip,{direction:'top',offset:[0,-14]});
     markers[r.id]=m;
   });
 }
@@ -1750,11 +1888,13 @@ function parseOverpass(j){
     const key = name+'@'+la.toFixed(4)+lo.toFixed(4);
     if(seen.has(key)) return; seen.add(key);
     const cid = matchChain(name), chain = cid? RMAP[cid] : null;
+    const avg = chain ? null : cuisineAvg(el.tags.cuisine, el.tags.amenity);
     out.push({
       id:'osm'+i, name,
-      cuisine: chain? chain.cuisine : prettyCuisine(el.tags.cuisine || el.tags.amenity),
+      cuisine: chain? chain.cuisine : avg.label,
       lat:la, lng:lo,
-      items: chain? chain.items : null
+      items: chain? chain.items : avg.items,
+      estimated: !chain
     });
   });
   return out;
@@ -1862,7 +2002,7 @@ function render(){
       <div class="thumb">${dishEmoji(t.name,t.cuisine)}</div>
       <div>
         <div class="badge">Top pick right now</div>
-        <div class="pick">${esc(t.name)}</div>
+        <div class="pick">${esc(t.name)}${t.estimated?` <span class="est-tag" title="Cuisine-average estimate — not this restaurant's specific menu">avg</span>`:''}</div>
         <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein · <span class="num" style="color:${tvcol};font-weight:600" title="${(t.e/t.usd).toFixed(2)} protein-efficiency per dollar">$${t.usd.toFixed(2)}</span></div>
         <a class="directions" href="${directionsUrl(t.rlat,t.rlng)}" target="_blank" rel="noopener" aria-label="Get walking directions to ${esc(t.rest)}">${DIR_SVG}Directions</a>
       </div>
@@ -1895,7 +2035,7 @@ function render(){
       return `<div class="item ${state.selected===x.rid?'sel':''}" data-rid="${x.rid}">
         <div class="thumb">${dishEmoji(x.name,x.cuisine)}</div>
         <div class="txt">
-          <div class="name">${esc(x.name)}</div>
+          <div class="name">${esc(x.name)}${x.estimated?` <span class="est-tag" title="Cuisine-average estimate — not this restaurant's specific menu">avg</span>`:''}</div>
           <div class="rest">${esc(x.rest)} <span class="cuisine">· ${esc(x.cuisine)}</span></div>
         </div>
         <div class="eff">
