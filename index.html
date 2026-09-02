@@ -920,6 +920,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .rating{display:inline-flex;align-items:center;gap:3px;color:#D6A727;font-weight:600}
   .rating svg{width:13px;height:13px}
   .rating b{color:var(--ink);font-weight:600}
+  .pricelvl{color:var(--muted);font-weight:600;letter-spacing:.5px}
+  .pricelvl .on{color:var(--ink)}
   .dirbtn{
     width:24px;height:24px;border-radius:50%;flex:none;
     background:var(--pine-soft);color:var(--pine);
@@ -1543,14 +1545,27 @@ function deliveryPillsHtml(name){
 }
 const STAR_SVG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 6.3 6.9.7-5.2 4.7 1.5 6.8L12 17.6l-6.1 3.4 1.5-6.8-5.2-4.7 6.9-.7z"/></svg>`;
 // renders next to the price, but only for a restaurant that actually has a real
-// rating/ratingCount set on it (see the fetchRating stub above) — with no live
-// ratings source wired up yet, this returns '' for every restaurant today rather
-// than showing a made-up number next to a real, named business.
+// rating/ratingCount set on it (see fetchPlaceInfo below) — with no API key set,
+// nothing sets rating, so this returns '' for every restaurant rather than
+// showing a made-up number next to a real, named business.
 function ratingHtml(restaurant){
   if(!restaurant || restaurant.rating==null) return '';
   const r = restaurant.rating, n = restaurant.ratingCount;
   const title = n!=null ? `${r.toFixed(1)} stars (${n.toLocaleString()} Google reviews)` : `${r.toFixed(1)} stars on Google`;
   return `<span class="rating" title="${title}">${STAR_SVG}<b class="num">${r.toFixed(1)}</b></span>`;
+}
+// Google's venue-wide cost bucket ($ .. $$$$) — NOT a per-dish price. The app's own
+// per-dish $ figures (from NUTRITION / the est. tier) are the real menu pricing;
+// this is just Google's own guess at how pricey the place is overall.
+const PRICE_LEVEL_DOTS = { PRICE_LEVEL_FREE:0, PRICE_LEVEL_INEXPENSIVE:1, PRICE_LEVEL_MODERATE:2, PRICE_LEVEL_EXPENSIVE:3, PRICE_LEVEL_VERY_EXPENSIVE:4 };
+function priceLevelHtml(restaurant){
+  if(!restaurant || restaurant.priceLevel==null) return '';
+  const n = PRICE_LEVEL_DOTS[restaurant.priceLevel];
+  if(!n) return '';                                   // free / unknown isn't worth a badge
+  const range = restaurant.priceRange && restaurant.priceRange.startPrice
+    ? ` (roughly ${restaurant.priceRange.startPrice.units||0}–${restaurant.priceRange.endPrice?.units ?? '?'} ${restaurant.priceRange.startPrice.currencyCode||''} per person, Google's estimate)`
+    : '';
+  return `<span class="pricelvl" title="Google's overall cost rating for this place${range}"><span class="on">${'$'.repeat(n)}</span>${'$'.repeat(4-n)}</span>`;
 }
 // Leaflet's SVG renderer sets stroke/fill as plain attributes, not CSS, so the
 // radius circle can't just reference var(--pine) — resolve the live theme color instead.
@@ -1808,11 +1823,11 @@ function setActive(list){
   active.forEach(r=>{
     if(!r.items) return;
     r.best = Math.max(...r.items.map(eff));
-    r.items.forEach(it=> DISHES.push({...it, rid:r.id, rest:r.name, cuisine:r.cuisine, rlat:r.lat, rlng:r.lng, e:eff(it), rating:r.rating, ratingCount:r.ratingCount}));
+    r.items.forEach(it=> DISHES.push({...it, rid:r.id, rest:r.name, cuisine:r.cuisine, rlat:r.lat, rlng:r.lng, e:eff(it), rating:r.rating, ratingCount:r.ratingCount, priceLevel:r.priceLevel, priceRange:r.priceRange}));
   });
   rebuildMarkers();
   render();
-  loadRatingsForActive(active.filter(r=>r.items), ++ratingToken);   // no-op with no API key set
+  loadPlaceInfoForActive(active.filter(r=>r.items), ++ratingToken);   // no-op with no API key set
 }
 
 function rebuildMarkers(){
@@ -1924,51 +1939,61 @@ if(GOOGLE_MAPS_API_KEY){
   (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({key:GOOGLE_MAPS_API_KEY,v:"weekly"});
 }
 
-// Looks up one restaurant's real rating via Place.searchByText (the current
-// "Places API (New)" JS client). Returns null on no key, no match, or any
-// error — callers already treat null as "no rating available" today.
-async function fetchRating(name, lat, lng){
+// Looks up one restaurant's real rating + Google's own venue-wide cost bucket via
+// Place.searchByText (the current "Places API (New)" JS client). priceLevel and
+// priceRange sit in the same Enterprise SKU as rating/userRatingCount, so asking
+// for them here doesn't add a pricing tier beyond what the rating lookup already
+// costs. NOTE: Places has no per-dish menu data at all — see priceLevelHtml above.
+// Returns null on no key, no match, or any error — callers already treat null as
+// "no info available" today.
+async function fetchPlaceInfo(name, lat, lng){
   if(!GOOGLE_MAPS_API_KEY) return null;
   try{
     const { Place } = await google.maps.importLibrary('places');
     const { places } = await Place.searchByText({
       textQuery: name,
-      fields: ['rating','userRatingCount'],
+      fields: ['rating','userRatingCount','priceLevel','priceRange'],
       locationBias: {lat, lng},
       maxResultCount: 1,
     });
     const p = places && places[0];
-    return p && p.rating!=null ? { rating: p.rating, ratingCount: p.userRatingCount } : null;
+    if(!p) return null;
+    return {
+      rating: p.rating ?? null,
+      ratingCount: p.userRatingCount ?? null,
+      priceLevel: p.priceLevel ?? null,
+      priceRange: p.priceRange ?? null,
+    };
   }catch(e){
-    console.warn('rating lookup failed for', name, e);
+    console.warn('place info lookup failed for', name, e);
     return null;
   }
 }
 
-// Fetches ratings for the restaurants currently on the map — capped and cached
-// so panning/filtering doesn't keep re-billing the same places. Runs fire-and-
+// Fetches rating + price info for the restaurants currently on the map — capped and
+// cached so panning/filtering doesn't keep re-billing the same places. Runs fire-and-
 // forget from setActive(); each result patches in and re-renders as it lands.
-const ratingCache = new Map();     // restaurant name -> {rating, ratingCount} | null
-const RATING_FETCH_CAP = 15;       // real places to look up per search, at most
-async function loadRatingsForActive(forRestaurants, myToken){
+const placeInfoCache = new Map();  // restaurant name -> {rating, ratingCount, priceLevel, priceRange} | null
+const PLACE_INFO_FETCH_CAP = 15;   // real places to look up per search, at most
+async function loadPlaceInfoForActive(forRestaurants, myToken){
   if(!GOOGLE_MAPS_API_KEY) return;
-  for(const r of forRestaurants.slice(0, RATING_FETCH_CAP)){
+  for(const r of forRestaurants.slice(0, PLACE_INFO_FETCH_CAP)){
     if(myToken!==ratingToken) return;                  // a newer search superseded this one — stop spending calls
-    if(ratingCache.has(r.name)){
-      const cached = ratingCache.get(r.name);
-      if(cached) applyRating(r.id, cached, myToken);
+    if(placeInfoCache.has(r.name)){
+      const cached = placeInfoCache.get(r.name);
+      if(cached) applyPlaceInfo(r.id, cached, myToken);
       continue;
     }
-    const result = await fetchRating(r.name, r.lat, r.lng);
-    ratingCache.set(r.name, result);
-    if(result) applyRating(r.id, result, myToken);
+    const result = await fetchPlaceInfo(r.name, r.lat, r.lng);
+    placeInfoCache.set(r.name, result);
+    if(result) applyPlaceInfo(r.id, result, myToken);
   }
 }
-function applyRating(rid, {rating, ratingCount}, myToken){
+function applyPlaceInfo(rid, {rating, ratingCount, priceLevel, priceRange}, myToken){
   if(myToken!==ratingToken) return;
   const r = active.find(x=>x.id===rid);
-  if(r){ r.rating = rating; r.ratingCount = ratingCount; }
-  DISHES.forEach(d=>{ if(d.rid===rid){ d.rating = rating; d.ratingCount = ratingCount; } });
+  if(r){ r.rating = rating; r.ratingCount = ratingCount; r.priceLevel = priceLevel; r.priceRange = priceRange; }
+  DISHES.forEach(d=>{ if(d.rid===rid){ d.rating = rating; d.ratingCount = ratingCount; d.priceLevel = priceLevel; d.priceRange = priceRange; } });
   render();
 }
 
@@ -2122,7 +2147,7 @@ function render(){
       <div>
         <div class="badge">Top pick right now</div>
         <div class="pick">${esc(t.name)}${t.estimated?` <span class="est-tag" title="Cuisine-average estimate — not this restaurant's specific menu">avg</span>`:''}</div>
-        <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein · <span class="num" style="color:${tvcol};font-weight:600" title="${(t.e/t.usd).toFixed(2)} protein-efficiency per dollar">$${t.usd.toFixed(2)}</span>${t.rating!=null?' · '+ratingHtml(t):''}</div>
+        <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein · <span class="num" style="color:${tvcol};font-weight:600" title="${(t.e/t.usd).toFixed(2)} protein-efficiency per dollar">$${t.usd.toFixed(2)}</span>${t.rating!=null?' · '+ratingHtml(t):''}${t.priceLevel!=null?' · '+priceLevelHtml(t):''}</div>
         <div class="actions">
           <a class="directions" href="${directionsUrl(t.rlat,t.rlng)}" target="_blank" rel="noopener" aria-label="Get walking directions to ${esc(t.rest)}">${DIR_SVG}Directions</a>
           ${deliveryPillsHtml(t.rest)}
@@ -2169,6 +2194,7 @@ function render(){
           <span class="pro"><b class="num">${x.pro}</b> g protein</span>
           <span class="price num" style="color:${vcol}" title="${v.toFixed(2)} protein-efficiency per dollar"><b>$${x.usd.toFixed(2)}</b></span>
           ${ratingHtml(x)}
+          ${priceLevelHtml(x)}
           <span class="dist num">${kmToMi(x.dist).toFixed(1)} mi</span>
           <a class="dirbtn" href="${directionsUrl(x.rlat,x.rlng)}" target="_blank" rel="noopener" aria-label="Get walking directions to ${esc(x.rest)}" title="Directions to ${esc(x.rest)}">${DIR_SVG}</a>
           ${deliveryButtonsHtml(x.rest)}
