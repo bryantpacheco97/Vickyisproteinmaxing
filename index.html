@@ -1063,6 +1063,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
 
     <p class="hint"><b>Set your spot:</b> click anywhere on the map, or drag the blue pin. Distances update as you move it.</p>
+    <p class="hint"><b>Price color:</b> each dish's price is colored by protein-efficiency per dollar — <span style="color:var(--t1);font-weight:600">green</span> stretches your money furthest toward lean protein, <span style="color:var(--t4);font-weight:600">rust</span> costs the most per gram delivered.</p>
 
     <div class="ctl-h">Search</div>
     <div class="field search">
@@ -1070,7 +1071,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
       <button class="reset" id="reset">Reset everything</button>
     </div>
 
-    <p class="note">Live OpenStreetMap feed for real nearby restaurants, matched against real published nutrition for ~50 national chains plus NYC-area chains (Just Salad, Chopt, DIG, Pret A Manger, The Halal Guys, &amp;pizza, Fresh&amp;co, Bluestone Lane, Fields Good Chicken). Independents show on the map without data — the real coverage gap that only a nutrition API (e.g. Nutritionix) fully closes. Chain figures are representative; validate against official nutrition guides before production. Dish icons show food type, not real photos — per-dish photography needs a licensed image source.</p>
+    <p class="note">Live OpenStreetMap feed for real nearby restaurants, matched against real published nutrition for ~50 national chains plus NYC-area chains (Just Salad, Chopt, DIG, Pret A Manger, The Halal Guys, &amp;pizza, Fresh&amp;co, Bluestone Lane, Fields Good Chicken). Independents show on the map without data — the real coverage gap that only a nutrition API (e.g. Nutritionix) fully closes. Chain figures are representative; validate against official nutrition guides before production. Prices are representative national averages (menu.com / chain nutrition-portal listings) and vary by location and over time — a live pricing API would be needed to track them exactly. Dish icons show food type, not real photos — per-dish photography needs a licensed image source.</p>
   </aside>
 
   <div class="right">
@@ -1092,290 +1093,288 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </div>
 
 <script>
-/* ---------------- data: real chain items (calories, protein g). Values approximate for demo. ---------------- */
+/* ---------------- data: real chain items (calories, protein g, price $). Values approximate for demo. ---------------- */
 const NUTRITION = [
   {id:'chi',name:'Chipotle',cuisine:'Mexican',keys:['chipotle'],items:[
-    {name:'Double Chicken Bowl',cal:620,pro:68},
-    {name:'Chicken Burrito Bowl',cal:510,pro:46},
-    {name:'Chicken Salad, no rice',cal:350,pro:37},
-    {name:'Barbacoa Bowl',cal:520,pro:42},
-    {name:'Steak Bowl',cal:530,pro:40},
-    {name:'Sofritas Bowl',cal:470,pro:20},
-    {name:'Chips & Guacamole',cal:770,pro:9}]},
+    {name:'Double Chicken Bowl',cal:620,pro:68,usd:13.50},
+    {name:'Chicken Burrito Bowl',cal:510,pro:46,usd:10.75},
+    {name:'Chicken Salad, no rice',cal:350,pro:37,usd:10.75},
+    {name:'Barbacoa Bowl',cal:520,pro:42,usd:11.75},
+    {name:'Steak Bowl',cal:530,pro:40,usd:11.95},
+    {name:'Sofritas Bowl',cal:470,pro:20,usd:10.25},
+    {name:'Chips & Guacamole',cal:770,pro:9,usd:4.85}]},
   {id:'cav',name:'CAVA',cuisine:'Mediterranean',keys:['cava'],items:[
-    {name:'Grilled Chicken + Greens Bowl',cal:440,pro:42},
-    {name:'Chicken + Splendid Greens',cal:380,pro:38},
-    {name:'Chicken + RightRice Bowl',cal:560,pro:44},
-    {name:'Braised Lamb Bowl',cal:660,pro:36},
-    {name:'Harissa Falafel Bowl',cal:610,pro:18}]},
+    {name:'Grilled Chicken + Greens Bowl',cal:440,pro:42,usd:12.95},
+    {name:'Chicken + Splendid Greens',cal:380,pro:38,usd:12.45},
+    {name:'Chicken + RightRice Bowl',cal:560,pro:44,usd:13.25},
+    {name:'Braised Lamb Bowl',cal:660,pro:36,usd:14.95},
+    {name:'Harissa Falafel Bowl',cal:610,pro:18,usd:11.95}]},
   {id:'cfa',name:'Chick-fil-A',cuisine:'Chicken',keys:['chick-fil-a','chick fil a','chickfila'],items:[
-    {name:'Grilled Nuggets, 8 ct',cal:130,pro:25},
-    {name:'Grilled Nuggets, 12 ct',cal:200,pro:38},
-    {name:'Grilled Chicken Sandwich',cal:390,pro:28},
-    {name:'Cobb Salad w/ Grilled Chicken',cal:440,pro:40},
-    {name:'Spicy Chicken Sandwich',cal:450,pro:28},
-    {name:'Waffle Fries, medium',cal:420,pro:5}]},
+    {name:'Grilled Nuggets, 8 ct',cal:130,pro:25,usd:5.75},
+    {name:'Grilled Nuggets, 12 ct',cal:200,pro:38,usd:7.99},
+    {name:'Grilled Chicken Sandwich',cal:390,pro:28,usd:7.25},
+    {name:'Cobb Salad w/ Grilled Chicken',cal:440,pro:40,usd:8.99},
+    {name:'Spicy Chicken Sandwich',cal:450,pro:28,usd:6.49},
+    {name:'Waffle Fries, medium',cal:420,pro:5,usd:2.59}]},
   {id:'swg',name:'Sweetgreen',cuisine:'Salads',keys:['sweetgreen'],items:[
-    {name:'Protein Plate',cal:505,pro:42},
-    {name:'Chicken Pesto Parm',cal:700,pro:41},
-    {name:'Harvest Bowl',cal:685,pro:30},
-    {name:'Shroomami',cal:545,pro:18}]},
+    {name:'Protein Plate',cal:505,pro:42,usd:14.95},
+    {name:'Chicken Pesto Parm',cal:700,pro:41,usd:15.95},
+    {name:'Harvest Bowl',cal:685,pro:30,usd:13.95},
+    {name:'Shroomami',cal:545,pro:18,usd:13.45}]},
   {id:'sbx',name:'Starbucks',cuisine:'Cafe',keys:['starbucks'],items:[
-    {name:'Egg White & Red Pepper Bites',cal:170,pro:12},
-    {name:'Bacon & Gruyere Egg Bites',cal:300,pro:19},
-    {name:'Chicken & Quinoa Protein Bowl',cal:420,pro:27},
-    {name:'Turkey Bacon Egg White Sandwich',cal:230,pro:17},
-    {name:'Grande Latte, 2%',cal:190,pro:13},
-    {name:'Blueberry Muffin',cal:360,pro:6}]},
+    {name:'Egg White & Red Pepper Bites',cal:170,pro:12,usd:4.75},
+    {name:'Bacon & Gruyere Egg Bites',cal:300,pro:19,usd:4.95},
+    {name:'Chicken & Quinoa Protein Bowl',cal:420,pro:27,usd:6.95},
+    {name:'Turkey Bacon Egg White Sandwich',cal:230,pro:17,usd:5.45},
+    {name:'Grande Latte, 2%',cal:190,pro:13,usd:5.25},
+    {name:'Blueberry Muffin',cal:360,pro:6,usd:3.75}]},
   {id:'sub',name:'Subway',cuisine:'Sandwiches',keys:['subway'],items:[
-    {name:'Rotisserie Chicken, 6"',cal:350,pro:29},
-    {name:'Oven Roasted Turkey, 6"',cal:280,pro:19},
-    {name:'Steak & Cheese, 6"',cal:380,pro:26},
-    {name:'Tuna, 6"',cal:480,pro:20},
-    {name:'Veggie Delite, 6"',cal:200,pro:8}]},
+    {name:'Rotisserie Chicken, 6"',cal:350,pro:29,usd:8.49},
+    {name:'Oven Roasted Turkey, 6"',cal:280,pro:19,usd:7.99},
+    {name:'Steak & Cheese, 6"',cal:380,pro:26,usd:9.49},
+    {name:'Tuna, 6"',cal:480,pro:20,usd:7.99},
+    {name:'Veggie Delite, 6"',cal:200,pro:8,usd:6.49}]},
   {id:'pnd',name:'Panda Express',cuisine:'Chinese',keys:['panda express'],items:[
-    {name:'Grilled Teriyaki Chicken',cal:300,pro:33},
-    {name:'String Bean Chicken Breast',cal:190,pro:14},
-    {name:'Broccoli Beef',cal:150,pro:9},
-    {name:'Super Greens',cal:90,pro:6},
-    {name:'Kung Pao Chicken',cal:290,pro:16},
-    {name:'Orange Chicken',cal:490,pro:25}]},
-  {id:'wen',name:"Wendy's",cuisine:'Burgers',keys:['wendy'],items:[
-    {name:'Grilled Chicken Sandwich',cal:360,pro:34},
-    {name:'Chili, large',cal:330,pro:28},
-    {name:'Southwest Avocado Salad + Chicken',cal:570,pro:37},
-    {name:'Baconator',cal:950,pro:56},
-    {name:'Fries, medium',cal:420,pro:5}]},
-  {id:'mcd',name:"McDonald's",cuisine:'Burgers',keys:['mcdonald'],items:[
-    {name:'Egg McMuffin',cal:310,pro:17},
-    {name:'6-pc Chicken McNuggets',cal:250,pro:15},
-    {name:'Hamburger',cal:250,pro:12},
-    {name:'McChicken',cal:400,pro:14},
-    {name:'Big Mac',cal:590,pro:25},
-    {name:'Fries, medium',cal:320,pro:5}]},
+    {name:'Grilled Teriyaki Chicken',cal:300,pro:33,usd:5.20},
+    {name:'String Bean Chicken Breast',cal:190,pro:14,usd:5.20},
+    {name:'Broccoli Beef',cal:150,pro:9,usd:5.00},
+    {name:'Super Greens',cal:90,pro:6,usd:3.60},
+    {name:'Kung Pao Chicken',cal:290,pro:16,usd:5.20},
+    {name:'Orange Chicken',cal:490,pro:25,usd:5.20}]},
+  {id:'wen',name:'Wendy\'s',cuisine:'Burgers',keys:['wendy'],items:[
+    {name:'Grilled Chicken Sandwich',cal:360,pro:34,usd:6.79},
+    {name:'Chili, large',cal:330,pro:28,usd:3.79},
+    {name:'Southwest Avocado Salad + Chicken',cal:570,pro:37,usd:8.49},
+    {name:'Baconator',cal:950,pro:56,usd:8.19},
+    {name:'Fries, medium',cal:420,pro:5,usd:2.79}]},
+  {id:'mcd',name:'McDonald\'s',cuisine:'Burgers',keys:['mcdonald'],items:[
+    {name:'Egg McMuffin',cal:310,pro:17,usd:4.29},
+    {name:'6-pc Chicken McNuggets',cal:250,pro:15,usd:5.49},
+    {name:'Hamburger',cal:250,pro:12,usd:2.19},
+    {name:'McChicken',cal:400,pro:14,usd:2.39},
+    {name:'Big Mac',cal:590,pro:25,usd:5.91},
+    {name:'Fries, medium',cal:320,pro:5,usd:3.19}]},
   {id:'tbl',name:'Taco Bell',cuisine:'Mexican',keys:['taco bell'],items:[
-    {name:'Chicken Power Menu Bowl',cal:470,pro:26},
-    {name:'Grilled Chicken Soft Taco',cal:180,pro:12},
-    {name:'Chicken Quesadilla',cal:510,pro:27},
-    {name:'Black Bean Crunchwrap',cal:500,pro:13}]},
+    {name:'Chicken Power Menu Bowl',cal:470,pro:26,usd:7.49},
+    {name:'Grilled Chicken Soft Taco',cal:180,pro:12,usd:2.49},
+    {name:'Chicken Quesadilla',cal:510,pro:27,usd:5.99},
+    {name:'Black Bean Crunchwrap',cal:500,pro:13,usd:5.49}]},
   {id:'pan',name:'Panera',cuisine:'Cafe',keys:['panera'],items:[
-    {name:'Green Goddess Cobb + Chicken',cal:530,pro:38},
-    {name:'Turkey Chili, cup',cal:250,pro:18},
-    {name:'Grilled Chicken Caesar Salad',cal:510,pro:34},
-    {name:'Ten Vegetable Soup',cal:120,pro:4},
-    {name:'Mac & Cheese, regular',cal:960,pro:33}]},
+    {name:'Green Goddess Cobb + Chicken',cal:530,pro:38,usd:11.99},
+    {name:'Turkey Chili, cup',cal:250,pro:18,usd:6.79},
+    {name:'Grilled Chicken Caesar Salad',cal:510,pro:34,usd:11.49},
+    {name:'Ten Vegetable Soup',cal:120,pro:4,usd:6.49},
+    {name:'Mac & Cheese, regular',cal:960,pro:33,usd:8.99}]},
   {id:'fvg',name:'Five Guys',cuisine:'Burgers',keys:['five guys'],items:[
-    {name:'Little Cheeseburger',cal:550,pro:28},
-    {name:'Little Hamburger',cal:480,pro:23},
-    {name:'Little Fries',cal:530,pro:8},
-    {name:'Fries, regular',cal:950,pro:15}]},
-  {id:'dnk',name:"Dunkin'",cuisine:'Cafe',keys:['dunkin'],items:[
-    {name:'Wake-Up Wrap, Egg & Cheese',cal:180,pro:7},
-    {name:'Sausage Egg & Cheese English Muffin',cal:470,pro:20},
-    {name:'Bacon Egg & Cheese Croissant',cal:530,pro:20},
-    {name:"Snackin' Bacon",cal:190,pro:12},
-    {name:'Latte, medium',cal:120,pro:6},
-    {name:'Glazed Donut',cal:240,pro:4}]},
+    {name:'Little Cheeseburger',cal:550,pro:28,usd:9.79},
+    {name:'Little Hamburger',cal:480,pro:23,usd:8.49},
+    {name:'Little Fries',cal:530,pro:8,usd:5.29},
+    {name:'Fries, regular',cal:950,pro:15,usd:7.29}]},
+  {id:'dnk',name:'Dunkin\'',cuisine:'Cafe',keys:['dunkin'],items:[
+    {name:'Wake-Up Wrap, Egg & Cheese',cal:180,pro:7,usd:2.99},
+    {name:'Sausage Egg & Cheese English Muffin',cal:470,pro:20,usd:5.29},
+    {name:'Bacon Egg & Cheese Croissant',cal:530,pro:20,usd:5.79},
+    {name:'Snackin\' Bacon',cal:190,pro:12,usd:3.49},
+    {name:'Latte, medium',cal:120,pro:6,usd:4.29},
+    {name:'Glazed Donut',cal:240,pro:4,usd:1.99}]},
   {id:'bk',name:'Burger King',cuisine:'Burgers',keys:['burger king'],items:[
-    {name:'Whopper',cal:660,pro:28},
-    {name:'Grilled Chicken Sandwich',cal:470,pro:37},
-    {name:'Chicken Jr.',cal:450,pro:14},
-    {name:'8-pc Nuggets',cal:340,pro:17},
-    {name:'Impossible Whopper',cal:630,pro:25}]},
+    {name:'Whopper',cal:660,pro:28,usd:7.19},
+    {name:'Grilled Chicken Sandwich',cal:470,pro:37,usd:6.99},
+    {name:'Chicken Jr.',cal:450,pro:14,usd:4.49},
+    {name:'8-pc Nuggets',cal:340,pro:17,usd:4.99},
+    {name:'Impossible Whopper',cal:630,pro:25,usd:8.29}]},
   {id:'kfc',name:'KFC',cuisine:'Chicken',keys:['kfc','kentucky fried'],items:[
-    {name:'Grilled Chicken Breast',cal:210,pro:38},
-    {name:'Original Recipe Breast',cal:390,pro:39},
-    {name:'8-pc Nuggets',cal:340,pro:19},
-    {name:'Famous Bowl',cal:710,pro:26},
-    {name:'Coleslaw',cal:170,pro:1}]},
+    {name:'Grilled Chicken Breast',cal:210,pro:38,usd:4.49},
+    {name:'Original Recipe Breast',cal:390,pro:39,usd:4.49},
+    {name:'8-pc Nuggets',cal:340,pro:19,usd:6.49},
+    {name:'Famous Bowl',cal:710,pro:26,usd:6.49},
+    {name:'Coleslaw',cal:170,pro:1,usd:2.79}]},
   {id:'pop',name:'Popeyes',cuisine:'Chicken',keys:['popeyes'],items:[
-    {name:'Blackened Tenders (3)',cal:170,pro:29},
-    {name:'Handcrafted Tenders (3)',cal:340,pro:24},
-    {name:'Spicy Chicken Sandwich',cal:700,pro:28},
-    {name:'Red Beans & Rice',cal:230,pro:6}]},
-  {id:'jm',name:"Jersey Mike's",cuisine:'Sandwiches',keys:['jersey mike'],items:[
-    {name:'Turkey & Provolone (in a tub)',cal:330,pro:30},
-    {name:'Roast Beef (in a tub)',cal:330,pro:34},
-    {name:'Turkey Sub (regular)',cal:780,pro:45},
-    {name:'Chicken Philly (regular)',cal:820,pro:56}]},
-  {id:'jj',name:"Jimmy John's",cuisine:'Sandwiches',keys:['jimmy john'],items:[
-    {name:'Turkey Tom (8")',cal:510,pro:24},
-    {name:'Vito (8")',cal:590,pro:28},
-    {name:'Turkey Unwich (lettuce wrap)',cal:230,pro:19},
-    {name:'Roast Beef (8")',cal:500,pro:27}]},
+    {name:'Blackened Tenders (3)',cal:170,pro:29,usd:6.49},
+    {name:'Handcrafted Tenders (3)',cal:340,pro:24,usd:6.99},
+    {name:'Spicy Chicken Sandwich',cal:700,pro:28,usd:5.19},
+    {name:'Red Beans & Rice',cal:230,pro:6,usd:2.99}]},
+  {id:'jm',name:'Jersey Mike\'s',cuisine:'Sandwiches',keys:['jersey mike'],items:[
+    {name:'Turkey & Provolone (in a tub)',cal:330,pro:30,usd:9.49},
+    {name:'Roast Beef (in a tub)',cal:330,pro:34,usd:10.49},
+    {name:'Turkey Sub (regular)',cal:780,pro:45,usd:11.49},
+    {name:'Chicken Philly (regular)',cal:820,pro:56,usd:12.49}]},
+  {id:'jj',name:'Jimmy John\'s',cuisine:'Sandwiches',keys:['jimmy john'],items:[
+    {name:'Turkey Tom (8")',cal:510,pro:24,usd:9.49},
+    {name:'Vito (8")',cal:590,pro:28,usd:9.99},
+    {name:'Turkey Unwich (lettuce wrap)',cal:230,pro:19,usd:8.99},
+    {name:'Roast Beef (8")',cal:500,pro:27,usd:9.49}]},
   {id:'ss',name:'Shake Shack',cuisine:'Burgers',keys:['shake shack'],items:[
-    {name:'ShackBurger, single',cal:530,pro:29},
-    {name:'Hamburger, single',cal:460,pro:25},
-    {name:'Chicken Shack',cal:590,pro:33},
-    {name:'Hot Dog',cal:340,pro:13}]},
+    {name:'ShackBurger, single',cal:530,pro:29,usd:8.29},
+    {name:'Hamburger, single',cal:460,pro:25,usd:7.29},
+    {name:'Chicken Shack',cal:590,pro:33,usd:9.29},
+    {name:'Hot Dog',cal:340,pro:13,usd:5.99}]},
   {id:'ino',name:'In-N-Out',cuisine:'Burgers',keys:['in-n-out','in n out'],items:[
-    {name:'Hamburger',cal:390,pro:16},
-    {name:'Cheeseburger',cal:480,pro:22},
-    {name:'Protein-Style Cheeseburger',cal:330,pro:18},
-    {name:'Double-Double',cal:670,pro:37},
-    {name:'Fries',cal:370,pro:7}]},
-  {id:'rc',name:"Raising Cane's",cuisine:'Chicken',keys:['raising cane',"cane's"],items:[
-    {name:'3 Chicken Fingers',cal:330,pro:27},
-    {name:'Kids Combo (2 fingers)',cal:220,pro:18},
-    {name:"Cane's Sauce",cal:190,pro:1},
-    {name:'Crinkle Fries',cal:420,pro:6}]},
-  {id:'chl',name:"Chili's",cuisine:'American',keys:["chili's",'chilis'],items:[
-    {name:'6 oz Classic Sirloin',cal:240,pro:40},
-    {name:'Grilled Chicken Fajitas (chicken)',cal:380,pro:43},
-    {name:'Ancho Salmon',cal:620,pro:50}]},
-  {id:'app',name:"Applebee's",cuisine:'American',keys:['applebee'],items:[
-    {name:'7 oz House Sirloin',cal:330,pro:44},
-    {name:'Grilled Chicken Breast',cal:340,pro:40},
-    {name:'Fiesta Lime Chicken',cal:1250,pro:60}]},
+    {name:'Hamburger',cal:390,pro:16,usd:3.45},
+    {name:'Cheeseburger',cal:480,pro:22,usd:3.85},
+    {name:'Protein-Style Cheeseburger',cal:330,pro:18,usd:4.35},
+    {name:'Double-Double',cal:670,pro:37,usd:5.85},
+    {name:'Fries',cal:370,pro:7,usd:2.90}]},
+  {id:'rc',name:'Raising Cane\'s',cuisine:'Chicken',keys:['raising cane','cane\'s'],items:[
+    {name:'3 Chicken Fingers',cal:330,pro:27,usd:9.49},
+    {name:'Kids Combo (2 fingers)',cal:220,pro:18,usd:6.49},
+    {name:'Cane\'s Sauce',cal:190,pro:1,usd:0.50},
+    {name:'Crinkle Fries',cal:420,pro:6,usd:3.49}]},
+  {id:'chl',name:'Chili\'s',cuisine:'American',keys:['chili\'s','chilis'],items:[
+    {name:'6 oz Classic Sirloin',cal:240,pro:40,usd:16.99},
+    {name:'Grilled Chicken Fajitas (chicken)',cal:380,pro:43,usd:15.99},
+    {name:'Ancho Salmon',cal:620,pro:50,usd:18.99}]},
+  {id:'app',name:'Applebee\'s',cuisine:'American',keys:['applebee'],items:[
+    {name:'7 oz House Sirloin',cal:330,pro:44,usd:16.99},
+    {name:'Grilled Chicken Breast',cal:340,pro:40,usd:14.99},
+    {name:'Fiesta Lime Chicken',cal:1250,pro:60,usd:17.99}]},
   {id:'og',name:'Olive Garden',cuisine:'Italian',keys:['olive garden'],items:[
-    {name:'Herb-Grilled Salmon',cal:460,pro:54},
-    {name:'Chicken Margherita',cal:560,pro:62},
-    {name:'Minestrone Soup',cal:110,pro:5},
-    {name:'Fettuccine Alfredo',cal:1010,pro:24}]},
-  {id:'dom',name:"Domino's",cuisine:'Pizza',keys:['domino'],items:[
-    {name:'Cheese (2 slices, medium)',cal:400,pro:16},
-    {name:'Pepperoni (2 slices)',cal:460,pro:20},
-    {name:'Buffalo Chicken (2 slices)',cal:440,pro:22}]},
+    {name:'Herb-Grilled Salmon',cal:460,pro:54,usd:21.99},
+    {name:'Chicken Margherita',cal:560,pro:62,usd:19.99},
+    {name:'Minestrone Soup',cal:110,pro:5,usd:5.99},
+    {name:'Fettuccine Alfredo',cal:1010,pro:24,usd:18.99}]},
+  {id:'dom',name:'Domino\'s',cuisine:'Pizza',keys:['domino'],items:[
+    {name:'Cheese (2 slices, medium)',cal:400,pro:16,usd:4.00},
+    {name:'Pepperoni (2 slices)',cal:460,pro:20,usd:4.50},
+    {name:'Buffalo Chicken (2 slices)',cal:440,pro:22,usd:4.75}]},
   {id:'ph',name:'Pizza Hut',cuisine:'Pizza',keys:['pizza hut'],items:[
-    {name:'Cheese (2 slices, hand-tossed)',cal:460,pro:22},
-    {name:'Pepperoni (2 slices)',cal:500,pro:22},
-    {name:'Traditional Wings (6)',cal:420,pro:48}]},
-  {id:'pj',name:"Papa John's",cuisine:'Pizza',keys:['papa john'],items:[
-    {name:'Cheese (2 slices)',cal:440,pro:18},
-    {name:'Pepperoni (2 slices)',cal:460,pro:20}]},
-  {id:'arb',name:"Arby's",cuisine:'Sandwiches',keys:['arby'],items:[
-    {name:'Roast Beef Classic',cal:360,pro:23},
-    {name:'Half Pound Roast Beef',cal:610,pro:42},
-    {name:'Roast Turkey Ranch & Bacon',cal:800,pro:45},
-    {name:'Curly Fries, medium',cal:410,pro:5}]},
+    {name:'Cheese (2 slices, hand-tossed)',cal:460,pro:22,usd:4.50},
+    {name:'Pepperoni (2 slices)',cal:500,pro:22,usd:4.75},
+    {name:'Traditional Wings (6)',cal:420,pro:48,usd:8.99}]},
+  {id:'pj',name:'Papa John\'s',cuisine:'Pizza',keys:['papa john'],items:[
+    {name:'Cheese (2 slices)',cal:440,pro:18,usd:4.25},
+    {name:'Pepperoni (2 slices)',cal:460,pro:20,usd:4.50}]},
+  {id:'arb',name:'Arby\'s',cuisine:'Sandwiches',keys:['arby'],items:[
+    {name:'Roast Beef Classic',cal:360,pro:23,usd:6.49},
+    {name:'Half Pound Roast Beef',cal:610,pro:42,usd:9.49},
+    {name:'Roast Turkey Ranch & Bacon',cal:800,pro:45,usd:10.49},
+    {name:'Curly Fries, medium',cal:410,pro:5,usd:3.79}]},
   {id:'son',name:'Sonic',cuisine:'American',keys:['sonic drive','sonic'],items:[
-    {name:'Jr. Burger',cal:330,pro:16},
-    {name:'Grilled Chicken Sandwich',cal:440,pro:29},
-    {name:'Corn Dog',cal:210,pro:6}]},
+    {name:'Jr. Burger',cal:330,pro:16,usd:3.29},
+    {name:'Grilled Chicken Sandwich',cal:440,pro:29,usd:6.49},
+    {name:'Corn Dog',cal:210,pro:6,usd:2.79}]},
   {id:'jib',name:'Jack in the Box',cuisine:'Burgers',keys:['jack in the box'],items:[
-    {name:'Jumbo Jack',cal:590,pro:23},
-    {name:'Chicken Fajita Pita',cal:330,pro:23},
-    {name:'Grilled Chicken Sandwich',cal:400,pro:28}]},
-  {id:'cj',name:"Carl's Jr.",cuisine:'Burgers',keys:["carl's jr",'carls jr'],items:[
-    {name:'Famous Star w/ Cheese',cal:670,pro:25},
-    {name:'Charbroiled Chicken Sandwich',cal:470,pro:34}]},
+    {name:'Jumbo Jack',cal:590,pro:23,usd:5.49},
+    {name:'Chicken Fajita Pita',cal:330,pro:23,usd:5.99},
+    {name:'Grilled Chicken Sandwich',cal:400,pro:28,usd:6.49}]},
+  {id:'cj',name:'Carl\'s Jr.',cuisine:'Burgers',keys:['carl\'s jr','carls jr'],items:[
+    {name:'Famous Star w/ Cheese',cal:670,pro:25,usd:7.79},
+    {name:'Charbroiled Chicken Sandwich',cal:470,pro:34,usd:7.49}]},
   {id:'wha',name:'Whataburger',cuisine:'Burgers',keys:['whataburger'],items:[
-    {name:'Whataburger',cal:590,pro:28},
-    {name:'Grilled Chicken Sandwich',cal:430,pro:33}]},
-  {id:'cul',name:"Culver's",cuisine:'Burgers',keys:['culver'],items:[
-    {name:'ButterBurger Cheese, single',cal:500,pro:25},
-    {name:'Grilled Chicken Sandwich',cal:470,pro:34}]},
+    {name:'Whataburger',cal:590,pro:28,usd:6.99},
+    {name:'Grilled Chicken Sandwich',cal:430,pro:33,usd:7.49}]},
+  {id:'cul',name:'Culver\'s',cuisine:'Burgers',keys:['culver'],items:[
+    {name:'ButterBurger Cheese, single',cal:500,pro:25,usd:6.49},
+    {name:'Grilled Chicken Sandwich',cal:470,pro:34,usd:7.49}]},
   {id:'wing',name:'Wingstop',cuisine:'Chicken',keys:['wingstop'],items:[
-    {name:'Jumbo Wings (6, plain)',cal:470,pro:36},
-    {name:'Boneless Wings (5)',cal:350,pro:24},
-    {name:'Seasoned Fries, regular',cal:480,pro:6}]},
+    {name:'Jumbo Wings (6, plain)',cal:470,pro:36,usd:11.99},
+    {name:'Boneless Wings (5)',cal:350,pro:24,usd:8.49},
+    {name:'Seasoned Fries, regular',cal:480,pro:6,usd:3.99}]},
   {id:'bww',name:'Buffalo Wild Wings',cuisine:'Chicken',keys:['buffalo wild wings'],items:[
-    {name:'Traditional Wings (6, plain)',cal:430,pro:36},
-    {name:'Naked Tenders (5)',cal:200,pro:38},
-    {name:'Boneless Wings (6)',cal:320,pro:26}]},
+    {name:'Traditional Wings (6, plain)',cal:430,pro:36,usd:11.99},
+    {name:'Naked Tenders (5)',cal:200,pro:38,usd:12.99},
+    {name:'Boneless Wings (6)',cal:320,pro:26,usd:11.99}]},
   {id:'epl',name:'El Pollo Loco',cuisine:'Mexican',keys:['el pollo loco'],items:[
-    {name:'Flame-Grilled Skinless Breast',cal:180,pro:36},
-    {name:'Chicken Avocado Salad',cal:480,pro:40},
-    {name:'Double Chicken Bowl',cal:560,pro:50}]},
+    {name:'Flame-Grilled Skinless Breast',cal:180,pro:36,usd:4.49},
+    {name:'Chicken Avocado Salad',cal:480,pro:40,usd:9.99},
+    {name:'Double Chicken Bowl',cal:560,pro:50,usd:10.99}]},
   {id:'qdo',name:'Qdoba',cuisine:'Mexican',keys:['qdoba'],items:[
-    {name:'Chicken Bowl',cal:500,pro:40},
-    {name:'Grilled Chicken Protein Bowl',cal:380,pro:45}]},
-  {id:'moe',name:"Moe's",cuisine:'Mexican',keys:["moe's southwest"],items:[
-    {name:'Chicken Bowl',cal:490,pro:41},
-    {name:'Homewrecker Burrito',cal:830,pro:45}]},
+    {name:'Chicken Bowl',cal:500,pro:40,usd:10.49},
+    {name:'Grilled Chicken Protein Bowl',cal:380,pro:45,usd:11.49}]},
+  {id:'moe',name:'Moe\'s',cuisine:'Mexican',keys:['moe\'s southwest'],items:[
+    {name:'Chicken Bowl',cal:490,pro:41,usd:10.49},
+    {name:'Homewrecker Burrito',cal:830,pro:45,usd:11.49}]},
   {id:'del',name:'Del Taco',cuisine:'Mexican',keys:['del taco'],items:[
-    {name:'Grilled Chicken Soft Taco',cal:150,pro:9},
-    {name:'Del Taco',cal:160,pro:9},
-    {name:'Fresca Grilled Chicken Bowl',cal:420,pro:36}]},
+    {name:'Grilled Chicken Soft Taco',cal:150,pro:9,usd:3.49},
+    {name:'Del Taco',cal:160,pro:9,usd:2.29},
+    {name:'Fresca Grilled Chicken Bowl',cal:420,pro:36,usd:8.99}]},
   {id:'fh',name:'Firehouse Subs',cuisine:'Sandwiches',keys:['firehouse'],items:[
-    {name:'Hook & Ladder (medium)',cal:590,pro:36},
-    {name:'Turkey Breast (medium)',cal:560,pro:34},
-    {name:'Smokehouse Beef & Cheddar',cal:810,pro:47}]},
+    {name:'Hook & Ladder (medium)',cal:590,pro:36,usd:11.49},
+    {name:'Turkey Breast (medium)',cal:560,pro:34,usd:10.49},
+    {name:'Smokehouse Beef & Cheddar',cal:810,pro:47,usd:12.49}]},
   {id:'lc',name:'Little Caesars',cuisine:'Pizza',keys:['little caesar'],items:[
-    {name:'Classic Cheese (1 slice)',cal:240,pro:11},
-    {name:'Pepperoni (1 slice)',cal:280,pro:13},
-    {name:'Crazy Bread (1)',cal:100,pro:3}]},
+    {name:'Classic Cheese (1 slice)',cal:240,pro:11,usd:1.75},
+    {name:'Pepperoni (1 slice)',cal:280,pro:13,usd:1.90},
+    {name:'Crazy Bread (1)',cal:100,pro:3,usd:0.85}]},
   {id:'noo',name:'Noodles & Company',cuisine:'Noodles',keys:['noodles & company','noodles and company'],items:[
-    {name:'Penne Rosa + Chicken',cal:590,pro:34},
-    {name:'Japanese Pan Noodles',cal:590,pro:17},
-    {name:'Pad Thai',cal:660,pro:22},
-    {name:'Wisconsin Mac & Cheese',cal:940,pro:30}]},
+    {name:'Penne Rosa + Chicken',cal:590,pro:34,usd:11.49},
+    {name:'Japanese Pan Noodles',cal:590,pro:17,usd:10.49},
+    {name:'Pad Thai',cal:660,pro:22,usd:10.99},
+    {name:'Wisconsin Mac & Cheese',cal:940,pro:30,usd:9.49}]},
   {id:'smk',name:'Smoothie King',cuisine:'Smoothies',keys:['smoothie king'],items:[
-    {name:'Gladiator Chocolate',cal:220,pro:45},
-    {name:'Angel Food',cal:300,pro:12},
-    {name:'Peanut Power Plus',cal:490,pro:17}]},
+    {name:'Gladiator Chocolate',cal:220,pro:45,usd:8.99},
+    {name:'Angel Food',cal:300,pro:12,usd:7.49},
+    {name:'Peanut Power Plus',cal:490,pro:17,usd:8.49}]},
   {id:'pot',name:'Potbelly',cuisine:'Sandwiches',keys:['potbelly'],items:[
-    {name:'Turkey Breast (original)',cal:460,pro:25},
-    {name:'A Wreck (original)',cal:600,pro:33},
-    {name:'Grilled Chicken (original)',cal:480,pro:30}]},
-  {id:'zax',name:"Zaxby's",cuisine:'Chicken',keys:['zaxby'],items:[
-    {name:'Grilled Cobb Zalad',cal:460,pro:45},
-    {name:'Chicken Fingerz (5)',cal:470,pro:34},
-    {name:'Boneless Wings (5)',cal:350,pro:24}]},
+    {name:'Turkey Breast (original)',cal:460,pro:25,usd:8.49},
+    {name:'A Wreck (original)',cal:600,pro:33,usd:9.99},
+    {name:'Grilled Chicken (original)',cal:480,pro:30,usd:9.49}]},
+  {id:'zax',name:'Zaxby\'s',cuisine:'Chicken',keys:['zaxby'],items:[
+    {name:'Grilled Cobb Zalad',cal:460,pro:45,usd:10.49},
+    {name:'Chicken Fingerz (5)',cal:470,pro:34,usd:9.49},
+    {name:'Boneless Wings (5)',cal:350,pro:24,usd:8.99}]},
   {id:'boj',name:'Bojangles',cuisine:'Chicken',keys:['bojangles'],items:[
-    {name:'Grilled Chicken Sandwich',cal:470,pro:28},
-    {name:'Cajun Filet Biscuit',cal:490,pro:25}]},
-  {id:'por',name:"Portillo's",cuisine:'American',keys:['portillo'],items:[
-    {name:'Italian Beef (regular)',cal:560,pro:35},
-    {name:'Char-Grilled Hot Dog',cal:480,pro:17}]},
+    {name:'Grilled Chicken Sandwich',cal:470,pro:28,usd:6.49},
+    {name:'Cajun Filet Biscuit',cal:490,pro:25,usd:4.49}]},
+  {id:'por',name:'Portillo\'s',cuisine:'American',keys:['portillo'],items:[
+    {name:'Italian Beef (regular)',cal:560,pro:35,usd:9.49},
+    {name:'Char-Grilled Hot Dog',cal:480,pro:17,usd:4.29}]},
   {id:'blz',name:'Blaze Pizza',cuisine:'Pizza',keys:['blaze pizza'],items:[
-    {name:'Build-Your-Own 11" (cheese)',cal:700,pro:28},
-    {name:'Meat Eater',cal:900,pro:45}]},
+    {name:'Build-Your-Own 11" (cheese)',cal:700,pro:28,usd:10.95},
+    {name:'Meat Eater',cal:900,pro:45,usd:12.95}]},
   {id:'txr',name:'Texas Roadhouse',cuisine:'Steakhouse',keys:['texas roadhouse'],items:[
-    {name:'6 oz Sirloin',cal:230,pro:38},
-    {name:'Grilled Chicken',cal:250,pro:40},
-    {name:'Grilled Salmon',cal:430,pro:48}]},
+    {name:'6 oz Sirloin',cal:230,pro:38,usd:14.99},
+    {name:'Grilled Chicken',cal:250,pro:40,usd:13.99},
+    {name:'Grilled Salmon',cal:430,pro:48,usd:18.99}]},
   {id:'out',name:'Outback Steakhouse',cuisine:'Steakhouse',keys:['outback'],items:[
-    {name:'6 oz Sirloin',cal:250,pro:40},
-    {name:'Grilled Chicken on the Barbie',cal:380,pro:60}]},
+    {name:'6 oz Sirloin',cal:250,pro:40,usd:16.99},
+    {name:'Grilled Chicken on the Barbie',cal:380,pro:60,usd:17.99}]},
   {id:'ihp',name:'IHOP',cuisine:'Breakfast',keys:['ihop'],items:[
-    {name:'Simple & Fit Veggie Omelette',cal:350,pro:24},
-    {name:'2-Egg Breakfast',cal:300,pro:18},
-    {name:'Short Stack Buttermilk Pancakes',cal:350,pro:8}]},
+    {name:'Simple & Fit Veggie Omelette',cal:350,pro:24,usd:12.49},
+    {name:'2-Egg Breakfast',cal:300,pro:18,usd:9.49},
+    {name:'Short Stack Buttermilk Pancakes',cal:350,pro:8,usd:8.49}]},
   {id:'ckb',name:'Cracker Barrel',cuisine:'American',keys:['cracker barrel'],items:[
-    {name:'Grilled Chicken Tenderloins',cal:380,pro:40},
-    {name:'Grilled Sirloin Steak',cal:300,pro:44}]},
-
-  // ---- NYC-area chains (all with published calorie + protein data) ----
+    {name:'Grilled Chicken Tenderloins',cal:380,pro:40,usd:13.99},
+    {name:'Grilled Sirloin Steak',cal:300,pro:44,usd:16.99}]},
   {id:'jsl',name:'Just Salad',cuisine:'Salads',keys:['just salad'],items:[
-    {name:'Thai Chicken Crunch Salad',cal:290,pro:34},
-    {name:'Backyard BBQ Salad',cal:470,pro:22},
-    {name:'Crispy Chicken Poblano Salad',cal:520,pro:22}]},
+    {name:'Thai Chicken Crunch Salad',cal:290,pro:34,usd:12.95},
+    {name:'Backyard BBQ Salad',cal:470,pro:22,usd:12.45},
+    {name:'Crispy Chicken Poblano Salad',cal:520,pro:22,usd:12.95}]},
   {id:'cht',name:'Chopt',cuisine:'Salads',keys:['chopt'],items:[
-    {name:'Classic Cobb',cal:600,pro:60},
-    {name:'Crispy Chicken Ranch',cal:575,pro:44},
-    {name:'Summer Corn Caesar Salad',cal:455,pro:39},
-    {name:'Sweet Peach Burrata Bowl',cal:520,pro:23}]},
+    {name:'Classic Cobb',cal:600,pro:60,usd:13.95},
+    {name:'Crispy Chicken Ranch',cal:575,pro:44,usd:13.45},
+    {name:'Summer Corn Caesar Salad',cal:455,pro:39,usd:12.95},
+    {name:'Sweet Peach Burrata Bowl',cal:520,pro:23,usd:13.95}]},
   {id:'dig',name:'DIG',cuisine:'Bowls',keys:['dig inn'],items:[
-    {name:'Hot Honey Chicken Bowl',cal:850,pro:48},
-    {name:'Classic Dig',cal:800,pro:38},
-    {name:'Spicy Salmon Bowl',cal:860,pro:33}]},
+    {name:'Hot Honey Chicken Bowl',cal:850,pro:48,usd:14.50},
+    {name:'Classic Dig',cal:800,pro:38,usd:13.75},
+    {name:'Spicy Salmon Bowl',cal:860,pro:33,usd:15.25}]},
   {id:'pam',name:'Pret A Manger',cuisine:'Cafe',keys:['pret a manger'],items:[
-    {name:'Satay Chicken Salad',cal:300,pro:25},
-    {name:'Chicken Caesar Salad',cal:336,pro:24},
-    {name:'Balsamic Chicken & Avocado Sandwich',cal:480,pro:23},
-    {name:'Sea Salt Popcorn',cal:100,pro:2}]},
+    {name:'Satay Chicken Salad',cal:300,pro:25,usd:8.99},
+    {name:'Chicken Caesar Salad',cal:336,pro:24,usd:8.49},
+    {name:'Balsamic Chicken & Avocado Sandwich',cal:480,pro:23,usd:7.99},
+    {name:'Sea Salt Popcorn',cal:100,pro:2,usd:2.49}]},
   {id:'thg',name:'The Halal Guys',cuisine:'Halal',keys:['halal guys'],items:[
-    {name:'Regular Chicken Platter',cal:648,pro:59},
-    {name:'Combo Platter',cal:1092,pro:72},
-    {name:'Regular Combo Platter',cal:1050,pro:58},
-    {name:'Regular Falafel Platter',cal:1049,pro:29}]},
+    {name:'Regular Chicken Platter',cal:648,pro:59,usd:11.99},
+    {name:'Combo Platter',cal:1092,pro:72,usd:13.99},
+    {name:'Regular Combo Platter',cal:1050,pro:58,usd:12.99},
+    {name:'Regular Falafel Platter',cal:1049,pro:29,usd:10.99}]},
   {id:'anp',name:'&pizza',cuisine:'Pizza',keys:['&pizza','and pizza'],items:[
-    {name:'High Protein Salad',cal:366,pro:37},
-    {name:'Maverick Pie',cal:1000,pro:52},
-    {name:'Hail! Caesar Salad Pie',cal:1337,pro:76}]},
+    {name:'High Protein Salad',cal:366,pro:37,usd:12.95},
+    {name:'Maverick Pie',cal:1000,pro:52,usd:13.95},
+    {name:'Hail! Caesar Salad Pie',cal:1337,pro:76,usd:14.95}]},
   {id:'frc',name:'Fresh&co',cuisine:'Salads',keys:['fresh&co','fresh & co'],items:[
-    {name:'Roasted Chicken Salad',cal:247,pro:42},
-    {name:'Roasted Turkey, Bacon & Blue Cheese Salad',cal:360,pro:39},
-    {name:'Caesar Salad with Chicken',cal:390,pro:20},
-    {name:'Chipotle-Lime Salad',cal:337,pro:18}]},
+    {name:'Roasted Chicken Salad',cal:247,pro:42,usd:11.95},
+    {name:'Roasted Turkey, Bacon & Blue Cheese Salad',cal:360,pro:39,usd:12.95},
+    {name:'Caesar Salad with Chicken',cal:390,pro:20,usd:11.45},
+    {name:'Chipotle-Lime Salad',cal:337,pro:18,usd:11.95}]},
   {id:'bsl',name:'Bluestone Lane',cuisine:'Cafe',keys:['bluestone lane'],items:[
-    {name:'Acai Bowl with Protein',cal:580,pro:24},
-    {name:'Protein Mocha Smoothie',cal:340,pro:21},
-    {name:'Protein PB & Blueberry Smoothie',cal:290,pro:21}]},
+    {name:'Acai Bowl with Protein',cal:580,pro:24,usd:13.50},
+    {name:'Protein Mocha Smoothie',cal:340,pro:21,usd:9.50},
+    {name:'Protein PB & Blueberry Smoothie',cal:290,pro:21,usd:9.50}]},
   {id:'fgc',name:'Fields Good Chicken',cuisine:'Chicken',keys:['fields good chicken'],items:[
-    {name:'Qtr Leg & Thigh',cal:230,pro:31},
-    {name:'Fields Good Cobb Salad',cal:780,pro:60}]},
+    {name:'Qtr Leg & Thigh',cal:230,pro:31,usd:8.95},
+    {name:'Fields Good Cobb Salad',cal:780,pro:60,usd:12.95}]},
 ];
 
 // chains scattered on the map when live search is unavailable (offline demo)
@@ -1384,6 +1383,8 @@ const DEMO_IDS = ['chi','cfa','cav','swg','sbx','pnd','wen','mcd','sub','pan','s
 /* ---------------- helpers ---------------- */
 const eff = (it)=> it.pro / it.cal * 100;           // g protein per 100 cal
 const tierColor = (e)=> e>=9?'var(--t1)': e>=6?'var(--t2)': e>=3?'var(--t3)':'var(--t4)';
+const value = (it)=> eff(it) / it.usd;              // protein-per-calorie efficiency you get per dollar
+const valColor = (v)=> v>=1.4?'var(--t1)': v>=0.9?'var(--t2)': v>=0.5?'var(--t3)':'var(--t4)';
 const kmToMi = (km)=> km*0.621371;
 const esc = (s)=> (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -1743,12 +1744,13 @@ function render(){
   // hero — best pick
   if(res.length){
     const t = res[0];
+    const tvcol = valColor(t.e/t.usd);
     hero.innerHTML = `
       <div class="thumb">${dishEmoji(t.name,t.cuisine)}</div>
       <div>
         <div class="badge">Top pick right now</div>
         <div class="pick">${esc(t.name)}</div>
-        <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein</div>
+        <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein · <span class="num" style="color:${tvcol};font-weight:600" title="${(t.e/t.usd).toFixed(2)} protein-efficiency per dollar">$${t.usd.toFixed(2)}</span></div>
       </div>
       <div class="score">
         <div class="big num">${t.e.toFixed(1)}</div>
@@ -1775,6 +1777,7 @@ function render(){
     list.innerHTML = res.map(x=>{
       const col = tierColor(x.e);
       const w = Math.min(100, x.e/scale*100);
+      const v = x.e/x.usd, vcol = valColor(v);
       return `<div class="item ${state.selected===x.rid?'sel':''}" data-rid="${x.rid}">
         <div class="thumb">${dishEmoji(x.name,x.cuisine)}</div>
         <div class="txt">
@@ -1788,6 +1791,7 @@ function render(){
         <div class="macros">
           <span class="cal"><b class="num">${x.cal}</b> cal</span>
           <span class="pro"><b class="num">${x.pro}</b> g protein</span>
+          <span class="price num" style="color:${vcol}" title="${v.toFixed(2)} protein-efficiency per dollar"><b>$${x.usd.toFixed(2)}</b></span>
           <span class="dist num">${kmToMi(x.dist).toFixed(1)} mi</span>
         </div>
         <div class="gauge" style="grid-column:1/4"><span style="width:${w}%;background:${col}"></span></div>
