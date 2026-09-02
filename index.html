@@ -914,6 +914,9 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .macros .cal{color:var(--ink)}
   .macros .pro{color:var(--pine)}
   .macros .dist{color:var(--muted);margin-left:auto}
+  .rating{display:inline-flex;align-items:center;gap:3px;color:#D6A727;font-weight:600}
+  .rating svg{width:13px;height:13px}
+  .rating b{color:var(--ink);font-weight:600}
   .dirbtn{
     width:24px;height:24px;border-radius:50%;flex:none;
     background:var(--pine-soft);color:var(--pine);
@@ -1502,6 +1505,17 @@ function directionsUrl(lat,lng){
   return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${lat},${lng}&travelmode=walking`;
 }
 const DIR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg>`;
+const STAR_SVG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 6.3 6.9.7-5.2 4.7 1.5 6.8L12 17.6l-6.1 3.4 1.5-6.8-5.2-4.7 6.9-.7z"/></svg>`;
+// renders next to the price, but only for a restaurant that actually has a real
+// rating/ratingCount set on it (see the fetchRating stub above) — with no live
+// ratings source wired up yet, this returns '' for every restaurant today rather
+// than showing a made-up number next to a real, named business.
+function ratingHtml(restaurant){
+  if(!restaurant || restaurant.rating==null) return '';
+  const r = restaurant.rating, n = restaurant.ratingCount;
+  const title = n!=null ? `${r.toFixed(1)} stars (${n.toLocaleString()} Google reviews)` : `${r.toFixed(1)} stars on Google`;
+  return `<span class="rating" title="${title}">${STAR_SVG}<b class="num">${r.toFixed(1)}</b></span>`;
+}
 // Leaflet's SVG renderer sets stroke/fill as plain attributes, not CSS, so the
 // radius circle can't just reference var(--pine) — resolve the live theme color instead.
 const pineColor = ()=> getComputedStyle(document.documentElement).getPropertyValue('--pine').trim() || '#17513A';
@@ -1758,7 +1772,7 @@ function setActive(list){
   active.forEach(r=>{
     if(!r.items) return;
     r.best = Math.max(...r.items.map(eff));
-    r.items.forEach(it=> DISHES.push({...it, rid:r.id, rest:r.name, cuisine:r.cuisine, rlat:r.lat, rlng:r.lng, e:eff(it)}));
+    r.items.forEach(it=> DISHES.push({...it, rid:r.id, rest:r.name, cuisine:r.cuisine, rlat:r.lat, rlng:r.lng, e:eff(it), rating:r.rating, ratingCount:r.ratingCount}));
   });
   rebuildMarkers();
   render();
@@ -1852,6 +1866,20 @@ async function runLiveSearch(opts){
 // }
 // Then in the results mapper below, for a restaurant with items===null, call fetchNutrition(name)
 // and, if it returns rows, treat that restaurant exactly like a matched chain.
+
+// ── OPTIONAL: real Google star ratings, per restaurant ──
+// Same limitation as above: no key/proxy in this preview, and a rating belongs to one
+// specific real place, so we never fabricate a number for it — the UI only renders a
+// restaurant's `rating`/`ratingCount` fields if something has actually set them, which
+// nothing does yet. Wire it up like this:
+//
+// async function fetchRating(name, lat, lng){
+//   const res = await fetch('/api/place-rating?q='+encodeURIComponent(name)+`&lat=${lat}&lng=${lng}`); // your proxy -> Google Places
+//   if(!res.ok) return null;
+//   const j = await res.json();                // { rating: 4.3, ratingCount: 1240 }
+//   return j.rating!=null ? j : null;
+// }
+// Then set r.rating / r.ratingCount on the restaurant object before render() runs.
 
 // several public Overpass mirrors — we try them in order so one being down/rate-limited isn't fatal
 const OVERPASS_ENDPOINTS = [
@@ -2003,7 +2031,7 @@ function render(){
       <div>
         <div class="badge">Top pick right now</div>
         <div class="pick">${esc(t.name)}${t.estimated?` <span class="est-tag" title="Cuisine-average estimate — not this restaurant's specific menu">avg</span>`:''}</div>
-        <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein · <span class="num" style="color:${tvcol};font-weight:600" title="${(t.e/t.usd).toFixed(2)} protein-efficiency per dollar">$${t.usd.toFixed(2)}</span></div>
+        <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein · <span class="num" style="color:${tvcol};font-weight:600" title="${(t.e/t.usd).toFixed(2)} protein-efficiency per dollar">$${t.usd.toFixed(2)}</span>${t.rating!=null?' · '+ratingHtml(t):''}</div>
         <a class="directions" href="${directionsUrl(t.rlat,t.rlng)}" target="_blank" rel="noopener" aria-label="Get walking directions to ${esc(t.rest)}">${DIR_SVG}Directions</a>
       </div>
       <div class="score">
@@ -2046,6 +2074,7 @@ function render(){
           <span class="cal"><b class="num">${x.cal}</b> cal</span>
           <span class="pro"><b class="num">${x.pro}</b> g protein</span>
           <span class="price num" style="color:${vcol}" title="${v.toFixed(2)} protein-efficiency per dollar"><b>$${x.usd.toFixed(2)}</b></span>
+          ${ratingHtml(x)}
           <span class="dist num">${kmToMi(x.dist).toFixed(1)} mi</span>
           <a class="dirbtn" href="${directionsUrl(x.rlat,x.rlng)}" target="_blank" rel="noopener" aria-label="Get walking directions to ${esc(x.rest)}" title="Directions to ${esc(x.rest)}">${DIR_SVG}</a>
         </div>
