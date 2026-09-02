@@ -884,6 +884,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   .hero .directions:hover{background:var(--pine);color:#fff}
   .hero .directions svg{width:13px;height:13px}
+  .hero .directions.plat{background:var(--c);color:#fff}
+  .hero .directions.plat:hover{background:var(--ch)}
 
   .count{font-size:13.5px;color:var(--muted);margin:0 2px 12px}
 
@@ -927,6 +929,12 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .dirbtn:hover,.dirbtn:focus-visible{background:var(--pine);color:#fff}
   .dirbtn:focus-visible{outline:2px solid var(--pine);outline-offset:2px}
   .dirbtn svg{width:13px;height:13px}
+  /* delivery-platform buttons: real brand color instead of the neutral pine theme */
+  .plat{background:var(--c);color:#fff}
+  .plat:hover,.plat:focus-visible{background:var(--ch)}
+  .plat:focus-visible{outline:2px solid var(--c);outline-offset:2px}
+  .dirbtn.plat b{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:12px}
+  .directions.plat b{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:13px}
   .eff{grid-column:3;grid-row:1/3;align-self:center;text-align:right;min-width:104px}
   .eff .val{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;line-height:1}
   .eff .unit{font-size:11px;color:var(--muted);margin-top:3px;white-space:nowrap}
@@ -1506,15 +1514,33 @@ function directionsUrl(lat,lng){
   return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${lat},${lng}&travelmode=walking`;
 }
 const DIR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg>`;
-// No delivery-platform API/key here, so — like directionsUrl — this is a plain
-// search link rather than a resolved deep link to the exact restaurant page; it
-// still lands the user on that restaurant's real results on Uber Eats if it's
-// listed there. Swap the base URL for Grubhub/Seamless's own ?queryText= search
-// (grubhub.com/search / seamless.com/search) if you'd rather default to those.
-function deliveryUrl(name){
-  return `https://www.ubereats.com/search?q=${encodeURIComponent(name)}`;
-}
 const BAG_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>`;
+// No delivery-platform API/keys in this preview, so — like directionsUrl — each of
+// these is a plain search link rather than a resolved deep link to the exact
+// restaurant listing; it still lands on that restaurant's real results if it's on
+// the platform. No pixel-exact brand logo files either (nothing to fetch them
+// from in this sandbox) — each button instead uses that platform's real brand
+// color plus a simple mark, close in spirit rather than an official asset.
+const DELIVERY_PLATFORMS = [
+  { key:'ubereats', label:'Uber Eats', color:'#06C167', hover:'#049e54',
+    mark: BAG_SVG, url:name=>`https://www.ubereats.com/search?q=${encodeURIComponent(name)}` },
+  { key:'grubhub', label:'Grubhub', color:'#F63440', hover:'#d81f2b',
+    mark:'<b>G</b>', url:name=>`https://www.grubhub.com/search?queryText=${encodeURIComponent(name)}` },
+  { key:'seamless', label:'Seamless', color:'#00A99D', hover:'#00897f',
+    mark:'<b>S</b>', url:name=>`https://www.seamless.com/search?queryText=${encodeURIComponent(name)}` },
+];
+// small round icon buttons for the item list (icon only)
+function deliveryButtonsHtml(name){
+  return DELIVERY_PLATFORMS.map(p=>
+    `<a class="dirbtn plat" style="--c:${p.color};--ch:${p.hover}" href="${p.url(name)}" target="_blank" rel="noopener" aria-label="Order from ${esc(name)} on ${p.label}" title="Order from ${esc(name)} on ${p.label}">${p.mark}</a>`
+  ).join('');
+}
+// labeled pill buttons for the hero card
+function deliveryPillsHtml(name){
+  return DELIVERY_PLATFORMS.map(p=>
+    `<a class="directions plat" style="--c:${p.color};--ch:${p.hover}" href="${p.url(name)}" target="_blank" rel="noopener" aria-label="Order from ${esc(name)} on ${p.label}">${p.mark}${p.label}</a>`
+  ).join('');
+}
 const STAR_SVG = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l2.9 6.3 6.9.7-5.2 4.7 1.5 6.8L12 17.6l-6.1 3.4 1.5-6.8-5.2-4.7 6.9-.7z"/></svg>`;
 // renders next to the price, but only for a restaurant that actually has a real
 // rating/ratingCount set on it (see the fetchRating stub above) — with no live
@@ -2044,7 +2070,7 @@ function render(){
         <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein · <span class="num" style="color:${tvcol};font-weight:600" title="${(t.e/t.usd).toFixed(2)} protein-efficiency per dollar">$${t.usd.toFixed(2)}</span>${t.rating!=null?' · '+ratingHtml(t):''}</div>
         <div class="actions">
           <a class="directions" href="${directionsUrl(t.rlat,t.rlng)}" target="_blank" rel="noopener" aria-label="Get walking directions to ${esc(t.rest)}">${DIR_SVG}Directions</a>
-          <a class="directions" href="${deliveryUrl(t.rest)}" target="_blank" rel="noopener" aria-label="Order from ${esc(t.rest)} on Uber Eats">${BAG_SVG}Order</a>
+          ${deliveryPillsHtml(t.rest)}
         </div>
       </div>
       <div class="score">
@@ -2090,7 +2116,7 @@ function render(){
           ${ratingHtml(x)}
           <span class="dist num">${kmToMi(x.dist).toFixed(1)} mi</span>
           <a class="dirbtn" href="${directionsUrl(x.rlat,x.rlng)}" target="_blank" rel="noopener" aria-label="Get walking directions to ${esc(x.rest)}" title="Directions to ${esc(x.rest)}">${DIR_SVG}</a>
-          <a class="dirbtn" href="${deliveryUrl(x.rest)}" target="_blank" rel="noopener" aria-label="Order from ${esc(x.rest)} on Uber Eats" title="Order from ${esc(x.rest)} on Uber Eats">${BAG_SVG}</a>
+          ${deliveryButtonsHtml(x.rest)}
         </div>
         <div class="gauge" style="grid-column:1/4"><span style="width:${w}%;background:${col}"></span></div>
       </div>`;
