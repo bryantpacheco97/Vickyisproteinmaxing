@@ -1755,7 +1755,7 @@ function cuisineAvg(rawCuisine, amenity){
 const state = { sort:'eff', maxCal:600, minPro:20, maxDist:0.5, q:'', selected:null, live:true, blocked:false };
 let map, youMarker, markers={}, origin=null, home=null, radiusCircle=null;
 let active=[], DISHES=[];              // active = restaurants currently on the map
-let searchTimer=null, searchToken=0;
+let searchTimer=null, searchToken=0, ratingToken=0;
 let areaBtn=null, lastSearchCenter=null, suppressAreaBtn=false, nodExpanded=false;
 
 // build the fixed demo restaurants as points scattered around a center
@@ -1812,6 +1812,7 @@ function setActive(list){
   });
   rebuildMarkers();
   render();
+  loadRatingsForActive(active.filter(r=>r.items), ++ratingToken);   // no-op with no API key set
 }
 
 function rebuildMarkers(){
@@ -1904,18 +1905,72 @@ async function runLiveSearch(opts){
 // and, if it returns rows, treat that restaurant exactly like a matched chain.
 
 // ── OPTIONAL: real Google star ratings, per restaurant ──
-// Same limitation as above: no key/proxy in this preview, and a rating belongs to one
-// specific real place, so we never fabricate a number for it — the UI only renders a
-// restaurant's `rating`/`ratingCount` fields if something has actually set them, which
-// nothing does yet. Wire it up like this:
+// Paste a Places API key (New) below to turn this on. Leave it blank to keep the
+// app exactly as it ships — every line below is a no-op with no key set, and the
+// UI already renders nothing for a restaurant with no rating/ratingCount.
 //
-// async function fetchRating(name, lat, lng){
-//   const res = await fetch('/api/place-rating?q='+encodeURIComponent(name)+`&lat=${lat}&lng=${lng}`); // your proxy -> Google Places
-//   if(!res.ok) return null;
-//   const j = await res.json();                // { rating: 4.3, ratingCount: 1240 }
-//   return j.rating!=null ? j : null;
-// }
-// Then set r.rating / r.ratingCount on the restaurant object before render() runs.
+// Get a key: console.cloud.google.com -> create/select a project -> enable
+// billing -> APIs & Services -> Library -> enable "Places API (New)" ->
+// Credentials -> Create Credentials -> API key -> edit the key -> under
+// "Application restrictions" choose "Websites" and add this site's domain(s) ->
+// under "API restrictions" limit it to "Places API (New)" only. That last step
+// matters: an unrestricted key pasted into client-side code like this is
+// visible to anyone who views the page source.
+const GOOGLE_MAPS_API_KEY = '';
+
+// Google's own dynamic bootstrap loader (unchanged from their docs) — only runs
+// if a key is set, so nothing loads or costs anything by default.
+if(GOOGLE_MAPS_API_KEY){
+  (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({key:GOOGLE_MAPS_API_KEY,v:"weekly"});
+}
+
+// Looks up one restaurant's real rating via Place.searchByText (the current
+// "Places API (New)" JS client). Returns null on no key, no match, or any
+// error — callers already treat null as "no rating available" today.
+async function fetchRating(name, lat, lng){
+  if(!GOOGLE_MAPS_API_KEY) return null;
+  try{
+    const { Place } = await google.maps.importLibrary('places');
+    const { places } = await Place.searchByText({
+      textQuery: name,
+      fields: ['rating','userRatingCount'],
+      locationBias: {lat, lng},
+      maxResultCount: 1,
+    });
+    const p = places && places[0];
+    return p && p.rating!=null ? { rating: p.rating, ratingCount: p.userRatingCount } : null;
+  }catch(e){
+    console.warn('rating lookup failed for', name, e);
+    return null;
+  }
+}
+
+// Fetches ratings for the restaurants currently on the map — capped and cached
+// so panning/filtering doesn't keep re-billing the same places. Runs fire-and-
+// forget from setActive(); each result patches in and re-renders as it lands.
+const ratingCache = new Map();     // restaurant name -> {rating, ratingCount} | null
+const RATING_FETCH_CAP = 15;       // real places to look up per search, at most
+async function loadRatingsForActive(forRestaurants, myToken){
+  if(!GOOGLE_MAPS_API_KEY) return;
+  for(const r of forRestaurants.slice(0, RATING_FETCH_CAP)){
+    if(myToken!==ratingToken) return;                  // a newer search superseded this one — stop spending calls
+    if(ratingCache.has(r.name)){
+      const cached = ratingCache.get(r.name);
+      if(cached) applyRating(r.id, cached, myToken);
+      continue;
+    }
+    const result = await fetchRating(r.name, r.lat, r.lng);
+    ratingCache.set(r.name, result);
+    if(result) applyRating(r.id, result, myToken);
+  }
+}
+function applyRating(rid, {rating, ratingCount}, myToken){
+  if(myToken!==ratingToken) return;
+  const r = active.find(x=>x.id===rid);
+  if(r){ r.rating = rating; r.ratingCount = ratingCount; }
+  DISHES.forEach(d=>{ if(d.rid===rid){ d.rating = rating; d.ratingCount = ratingCount; } });
+  render();
+}
 
 // several public Overpass mirrors — we try them in order so one being down/rate-limited isn't fatal
 const OVERPASS_ENDPOINTS = [
