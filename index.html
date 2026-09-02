@@ -1452,6 +1452,9 @@ function directionsUrl(lat,lng){
   return `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(originParam)}&destination=${lat},${lng}&travelmode=walking`;
 }
 const DIR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg>`;
+// Leaflet's SVG renderer sets stroke/fill as plain attributes, not CSS, so the
+// radius circle can't just reference var(--pine) — resolve the live theme color instead.
+const pineColor = ()=> getComputedStyle(document.documentElement).getPropertyValue('--pine').trim() || '#17513A';
 
 // original cartoon: buff girl flexing, six-pack — the "you are here" marker
 const YOU_SVG = `<svg viewBox="0 0 48 56" xmlns="http://www.w3.org/2000/svg">
@@ -1562,8 +1565,8 @@ function initMap(lat, lng){
   }).addTo(map);
 
   radiusCircle = L.circle([lat,lng],{
-    radius:state.maxDist*1609.34, color:'#17513A', weight:1, opacity:.35,
-    fillColor:'#17513A', fillOpacity:.05, dashArray:'4 5', interactive:false
+    radius:state.maxDist*1609.34, color:pineColor(), weight:2, opacity:.65,
+    fillColor:pineColor(), fillOpacity:.08, dashArray:'4 5', interactive:false
   }).addTo(map);
 
   youMarker = L.marker([lat,lng],{draggable:true,
@@ -1749,7 +1752,10 @@ function pulse(rid){
   const pin = markers[rid]?.getElement()?.querySelector('.pin');
   if(pin){ pin.classList.remove('pulse'); void pin.offsetWidth; pin.classList.add('pulse'); }
 }
-function setCircleVisible(v){ if(radiusCircle) radiusCircle.setStyle({opacity:v?.35:0, fillOpacity:v?.05:0}); }
+function setCircleVisible(v){
+  if(!radiusCircle) return;
+  radiusCircle.setStyle({opacity:v?.65:0, fillOpacity:v?.08:0, color:pineColor(), fillColor:pineColor()});
+}
 
 function setStatus(kind, total, withData, areaMode){
   const el=document.getElementById('liveStatus');
@@ -1932,6 +1938,7 @@ function renderNoData(el){
     root.setAttribute('data-theme', next);
     try{ localStorage.setItem(KEY, next); }catch(e){}
     sync();
+    if(radiusCircle) radiusCircle.setStyle({color:pineColor(), fillColor:pineColor()});
   });
   sync();
 })();
