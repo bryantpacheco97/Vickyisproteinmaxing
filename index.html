@@ -967,16 +967,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .sdot.load{background:var(--pine);animation:blink 1s infinite}
   @keyframes blink{50%{opacity:.3}}
   @media (prefers-reduced-motion:reduce){.sdot.load{animation:none}}
-  /* map loading overlay — shown while a live search is in flight */
+  /* map loading pill — shown near the top of the map while a live search is
+     in flight; kept off the map's center so it never fights the ring below */
   .maploading{
-    position:absolute;inset:0;z-index:450;
-    display:flex;align-items:center;justify-content:center;gap:10px;
-    background:color-mix(in srgb, var(--bg) 65%, transparent);
+    position:absolute;top:12px;left:50%;z-index:450;
+    display:inline-flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);
+    border-radius:999px;padding:8px 14px;
     pointer-events:none;
-    font-size:13.5px;font-weight:600;color:var(--pine);
-    opacity:0;transition:opacity .15s ease;
+    font-size:13px;font-weight:600;color:var(--pine);white-space:nowrap;
+    opacity:0;transform:translate(-50%,-6px);
+    transition:opacity .32s cubic-bezier(.4,0,.2,1),transform .32s cubic-bezier(.4,0,.2,1);
   }
-  .maploading.show{opacity:1}
+  .maploading.show{opacity:1;transform:translate(-50%,0)}
   .spinner{
     width:20px;height:20px;border-radius:50%;flex:none;
     border:3px solid color-mix(in srgb, var(--pine) 22%, transparent);
@@ -985,12 +988,24 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   @keyframes spin{to{transform:rotate(360deg)}}
   @media (prefers-reduced-motion:reduce){.spinner{animation:none}}
+  /* pulsing "searching here" rings — a reusable ripple, faded in/out smoothly
+     via opacity so the underlying keyframe loop never just pops on/off */
   @keyframes searchring{
     0%{box-shadow:0 0 0 0 color-mix(in srgb, var(--pine) 55%, transparent)}
-    100%{box-shadow:0 0 0 16px color-mix(in srgb, var(--pine) 0%, transparent)}
+    100%{box-shadow:0 0 0 18px color-mix(in srgb, var(--pine) 0%, transparent)}
   }
-  .you.searching{border-radius:50%;animation:searchring 1s ease-out infinite}
-  @media (prefers-reduced-motion:reduce){.you.searching{animation:none}}
+  .ring{
+    opacity:0;border-radius:50%;pointer-events:none;
+    transition:opacity .35s cubic-bezier(.4,0,.2,1);
+  }
+  .ring.show{opacity:1;animation:searchring 1.1s ease-out infinite}
+  @media (prefers-reduced-motion:reduce){.ring.show{animation:none;opacity:.6}}
+  .you .ring{position:absolute;inset:6px}
+  /* ring centered on the current map view — lit up for "search this area" */
+  .arearing{
+    position:absolute;top:50%;left:50%;width:20px;height:20px;
+    margin:-10px 0 0 -10px;z-index:440;background:var(--pine);
+  }
   /* search-this-area button */
   .maparea{position:relative}
   .areabtn{
@@ -1022,7 +1037,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .nod-list li:hover{background:var(--bg)}
   .nod-list li em{color:var(--muted);font-style:normal;opacity:.85}
   .nod-list li .num{color:var(--muted);flex:none}
-  .you{ width:44px;height:52px;cursor:grab; }
+  .you{ position:relative;width:44px;height:52px;cursor:grab; }
   .you svg{ width:100%;height:100%;display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35)); }
   .you:active{cursor:grabbing}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(31,157,87,.5)}100%{box-shadow:0 0 0 16px rgba(31,157,87,0)}}
@@ -1118,6 +1133,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     <div class="maparea">
       <div id="map"></div>
       <div id="mapLoading" class="maploading" aria-hidden="true"><span class="spinner"></span>Searching nearby…</div>
+      <div id="areaRing" class="ring arearing" aria-hidden="true"></div>
       <button id="areaBtn" class="areabtn" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
         Search this area
@@ -1550,7 +1566,7 @@ function initMap(lat, lng){
   }).addTo(map);
 
   youMarker = L.marker([lat,lng],{draggable:true,
-    icon:L.divIcon({className:'',html:'<div class="you">'+YOU_SVG+'</div>',iconSize:[44,52],iconAnchor:[22,50]})}).addTo(map);
+    icon:L.divIcon({className:'',html:'<div class="you"><span class="ring"></span>'+YOU_SVG+'</div>',iconSize:[44,52],iconAnchor:[22,50]})}).addTo(map);
   youMarker.bindTooltip('Drag me — or click the map — to search a new spot', {direction:'top',offset:[0,-10]});
   youMarker.on('dragend', e=>{ const p=e.target.getLatLng(); setOrigin(p.lat,p.lng,true); });
   map.on('click', e=> setOrigin(e.latlng.lat, e.latlng.lng, true));
@@ -1618,12 +1634,14 @@ function debounceSearch(){
 async function runLiveSearch(opts){
   if(!state.live) return;
   const token = ++searchToken;
-  setStatus('searching');
-  let areaClause, center, areaMode=false;
-  if(opts && opts.bbox){
+  const areaMode = !!(opts && opts.bbox);
+  if(areaBtn) areaBtn.hidden = true;   // hide right away so it never sits under the loading pill
+  setStatus('searching', null, null, areaMode);
+  let areaClause, center;
+  if(areaMode){
     const [s,w,n,e] = opts.bbox;
     areaClause = `${s},${w},${n},${e}`;               // Overpass bbox: south,west,north,east
-    center = opts.center; areaMode = true;
+    center = opts.center;
   } else {
     if(!origin) return;
     const rM = Math.min(state.maxDist*1609.34, 16000);
@@ -1635,7 +1653,6 @@ async function runLiveSearch(opts){
     if(token!==searchToken) return;                    // superseded
     state.blocked = false;
     lastSearchCenter = center;
-    if(areaBtn) areaBtn.hidden = true;
     setCircleVisible(!areaMode);                        // the pin radius is meaningless when scouting elsewhere
     if(!results.length){ setActive([]); setStatus('empty'); return; }
     const withData = results.filter(r=>r.items).length;
@@ -1645,7 +1662,6 @@ async function runLiveSearch(opts){
   }catch(err){
     if(token!==searchToken) return;
     state.blocked = true;                              // preview blocked the request — show NO fake pins
-    if(areaBtn) areaBtn.hidden = true;
     setCircleVisible(true);
     setActive([]);
     setStatus('blocked');
@@ -1734,24 +1750,29 @@ function pulse(rid){
 }
 function setCircleVisible(v){ if(radiusCircle) radiusCircle.setStyle({opacity:v?.35:0, fillOpacity:v?.05:0}); }
 
-function setStatus(kind, total, withData){
+function setStatus(kind, total, withData, areaMode){
   const el=document.getElementById('liveStatus');
-  setMapLoading(state.live && kind==='searching');
+  setMapLoading(state.live && kind==='searching', areaMode);
   if(!el) return;
   if(!state.live){ el.innerHTML = `<span class="sdot demo"></span> Sample data — live search off`; return; }
   el.innerHTML = ({
-    searching:`<span class="sdot load"></span> Searching OpenStreetMap near your pin…`,
+    searching:`<span class="sdot load"></span> Searching ${areaMode?'this area':'near your pin'}…`,
     ok:`<span class="sdot on"></span> ${total} places nearby · <b>${withData}</b> with nutrition data`,
     area:`<span class="sdot on"></span> Showing this area · ${total} places · <b>${withData}</b> with nutrition`,
     empty:`<span class="sdot off"></span> No restaurants found here — widen the radius or move the pin`,
     blocked:`<span class="sdot off"></span> Couldn't reach live map data from this preview — open the file in your browser for real pins.`,
   })[kind] || '';
 }
-function setMapLoading(on){
+// during a pin-radius search, ring the "you are here" pin; during a "search this
+// area" pass, ring the map's current center instead — the ring always sits over
+// whatever the search is actually centered on
+function setMapLoading(on, areaMode){
   const el = document.getElementById('mapLoading');
   if(el) el.classList.toggle('show', on);
-  const pin = youMarker?.getElement()?.querySelector('.you');
-  if(pin) pin.classList.toggle('searching', on);
+  const pinRing = youMarker?.getElement()?.querySelector('.ring');
+  if(pinRing) pinRing.classList.toggle('show', on && !areaMode);
+  const areaRing = document.getElementById('areaRing');
+  if(areaRing) areaRing.classList.toggle('show', on && !!areaMode);
 }
 
 /* ---------------- rendering ---------------- */
