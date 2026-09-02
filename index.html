@@ -1058,8 +1058,8 @@ svg.leaflet-image-layer.leaflet-interactive path {
     </div>
 
     <div class="field">
-      <label for="dist">Search radius <b><span id="distVal" class="num">3.0</span> mi</b></label>
-      <input type="range" id="dist" min="0.5" max="10" step="0.5" value="3">
+      <label for="dist">Search radius <b><span id="distVal" class="num">0.5</span> mi</b></label>
+      <input type="range" id="dist" min="0.5" max="10" step="0.5" value="0.5">
     </div>
 
     <p class="hint"><b>Set your spot:</b> click anywhere on the map, or drag the blue pin. Distances update as you move it.</p>
@@ -1468,7 +1468,7 @@ function prettyCuisine(c){
 }
 
 /* ---------------- state ---------------- */
-const state = { sort:'eff', maxCal:600, minPro:20, maxDist:3, q:'', selected:null, live:true, blocked:false };
+const state = { sort:'eff', maxCal:600, minPro:20, maxDist:0.5, q:'', selected:null, live:true, blocked:false };
 let map, youMarker, markers={}, origin=null, home=null, radiusCircle=null;
 let active=[], DISHES=[];              // active = restaurants currently on the map
 let searchTimer=null, searchToken=0;
@@ -1879,10 +1879,10 @@ liveToggle.addEventListener('change',()=>{
   else { setCircleVisible(true); setActive(buildDemoActive(origin.lat, origin.lng)); setStatus(); fitToMarkers(); }
 });
 document.getElementById('reset').addEventListener('click',()=>{
-  state.sort='eff'; state.maxCal=600; state.minPro=20; state.maxDist=3; state.q=''; state.selected=null;
-  calEl.value=600; proEl.value=20; distEl.value=3; qEl.value='';
+  state.sort='eff'; state.maxCal=600; state.minPro=20; state.maxDist=0.5; state.q=''; state.selected=null;
+  calEl.value=600; proEl.value=20; distEl.value=0.5; qEl.value='';
   document.getElementById('calVal').textContent='600'; document.getElementById('proVal').textContent='20';
-  document.getElementById('distVal').textContent='3.0';
+  document.getElementById('distVal').textContent='0.5';
   document.querySelectorAll('#sortSeg button').forEach(x=>x.setAttribute('aria-pressed', x.dataset.sort==='eff'));
   updateRadius();
   if(map && home) panTo(home.lat,home.lng,14);        // suppresses the area button
