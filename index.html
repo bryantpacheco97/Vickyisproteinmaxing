@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Density — the leanest, highest-protein food near you</title>
 
+<script>
+// applied before first paint so a saved preference doesn't flash the wrong theme
+(function(){
+  try{
+    var t = localStorage.getItem('density-theme');
+    if(t==='light' || t==='dark') document.documentElement.setAttribute('data-theme', t);
+  }catch(e){}
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -680,6 +689,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     --ink:#16211B;
     --muted:#5C6B60;
     --line:#DCE3D8;
+    --hover:#BCD0C1;
     --pine:#17513A;
     --pine-soft:#E7F0EA;
     /* efficiency spectrum: high protein-per-cal -> low */
@@ -688,7 +698,39 @@ svg.leaflet-image-layer.leaflet-interactive path {
     --t3:#C8842B;  /* 3–6 middling */
     --t4:#B0553B;  /* <3  calorie-heavy */
     --shadow:0 1px 2px rgba(22,33,27,.04), 0 8px 24px rgba(22,33,27,.06);
+    --map-bg:#E9EDE7;
+    --map-filter:none;
+    --attrib-bg:rgba(255,255,255,.8);
+    color-scheme:light dark;
   }
+  /* dark palette: same pine identity, inverted surfaces. Applies on system
+     preference (unless the toggle below has forced light), and always
+     under an explicit [data-theme="dark"]. */
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0D1411; --panel:#161F1A; --ink:#E8F0EA; --muted:#9FB0A3;
+      --line:#243128; --hover:#35473C;
+      --pine:#3ECC85; --pine-soft:#15271D;
+      --t1:#34D17A; --t2:#A7C25A; --t3:#E3993C; --t4:#D8724F;
+      --shadow:0 1px 2px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.6);
+      --map-bg:#0A100C;
+      --map-filter:invert(92%) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.85);
+      --attrib-bg:rgba(10,15,12,.75);
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0D1411; --panel:#161F1A; --ink:#E8F0EA; --muted:#9FB0A3;
+    --line:#243128; --hover:#35473C;
+    --pine:#3ECC85; --pine-soft:#15271D;
+    --t1:#34D17A; --t2:#A7C25A; --t3:#E3993C; --t4:#D8724F;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 8px 24px rgba(0,0,0,.6);
+    --map-bg:#0A100C;
+    --map-filter:invert(92%) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.85);
+    --attrib-bg:rgba(10,15,12,.75);
+    color-scheme:dark;
+  }
+  :root[data-theme="light"]{ color-scheme:light; }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{
@@ -703,11 +745,28 @@ svg.leaflet-image-layer.leaflet-interactive path {
 
   /* ---------- header ---------- */
   header{
+    position:relative;
     padding:22px clamp(16px,4vw,40px) 18px;
     border-bottom:1px solid var(--line);
     background:var(--panel);
   }
-  .brandrow{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .theme-toggle{
+    position:absolute;top:20px;right:clamp(16px,4vw,40px);z-index:1;
+    width:38px;height:38px;border-radius:50%;flex:none;
+    border:1px solid var(--line);background:var(--panel);color:var(--pine);
+    display:grid;place-items:center;cursor:pointer;transition:border-color .12s,background .12s;
+  }
+  .theme-toggle:hover{border-color:var(--hover)}
+  .theme-toggle:focus-visible{outline:2px solid var(--pine);outline-offset:2px}
+  .theme-toggle svg{width:18px;height:18px}
+  .theme-toggle .i-moon{display:none}
+  :root[data-theme="dark"] .theme-toggle .i-sun{display:none}
+  :root[data-theme="dark"] .theme-toggle .i-moon{display:block}
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]) .theme-toggle .i-sun{display:none}
+    :root:not([data-theme="light"]) .theme-toggle .i-moon{display:block}
+  }
+  .brandrow{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding-right:50px}
   .brand{
     font-family:'Space Grotesk',ui-sans-serif,system-ui,sans-serif;
     font-weight:700;font-size:30px;letter-spacing:-.02em;color:var(--pine);
@@ -735,7 +794,19 @@ svg.leaflet-image-layer.leaflet-interactive path {
     padding:22px clamp(16px,2vw,24px);
   }
   .right{display:flex;flex-direction:column;min-width:0}
-  #map{height:340px;width:100%;background:#e9ede7;z-index:0;cursor:crosshair}
+  #map{height:340px;width:100%;background:var(--map-bg);z-index:0;cursor:crosshair}
+  .leaflet-container{background:var(--map-bg)}
+  .leaflet-tile-pane{filter:var(--map-filter)}
+  .leaflet-bar a{background-color:var(--panel);color:var(--ink);border-bottom-color:var(--line)}
+  .leaflet-bar a.leaflet-disabled{background-color:var(--panel);color:var(--muted)}
+  .leaflet-bar{box-shadow:var(--shadow)}
+  .leaflet-container .leaflet-control-attribution{background:var(--attrib-bg)!important;color:var(--muted)}
+  .leaflet-control-attribution a{color:var(--pine)}
+  .leaflet-tooltip{background-color:var(--panel);border-color:var(--panel);color:var(--ink);box-shadow:var(--shadow)}
+  .leaflet-tooltip-top:before{border-top-color:var(--panel)}
+  .leaflet-tooltip-bottom:before{border-bottom-color:var(--panel)}
+  .leaflet-tooltip-left:before{border-left-color:var(--panel)}
+  .leaflet-tooltip-right:before{border-right-color:var(--panel)}
   .results{padding:20px clamp(16px,4vw,40px) 60px;flex:1}
 
   /* ---------- controls ---------- */
@@ -745,7 +816,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   .seg{display:flex;flex-direction:column;gap:6px;margin-bottom:26px}
   .seg button{
-    text-align:left;border:1px solid var(--line);background:#fff;color:var(--ink);
+    text-align:left;border:1px solid var(--line);background:var(--panel);color:var(--ink);
     padding:10px 12px;border-radius:10px;cursor:pointer;font:inherit;font-size:14px;
     display:flex;align-items:center;gap:10px;transition:border-color .12s,background .12s;
   }
@@ -753,7 +824,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
     width:22px;height:22px;flex:none;border-radius:6px;background:var(--pine-soft);
     display:grid;place-items:center;color:var(--pine);font-weight:600;font-size:12px;
   }
-  .seg button:hover{border-color:#bcd0c1}
+  .seg button:hover{border-color:var(--hover)}
   .seg button[aria-pressed="true"]{
     border-color:var(--pine);background:var(--pine-soft);
     box-shadow:inset 0 0 0 1px var(--pine);
@@ -775,7 +846,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   .search input{
     width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
-    font:inherit;font-size:14px;background:#fff;
+    font:inherit;font-size:14px;background:var(--panel);color:var(--ink);
   }
   .search input:focus{outline:2px solid var(--pine);outline-offset:1px;border-color:var(--pine)}
   .reset{
@@ -817,7 +888,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .thumb{border-radius:12px;background:var(--pine-soft);display:grid;place-items:center;line-height:1}
   .item .thumb{grid-column:1;grid-row:1/3;align-self:center;width:46px;height:46px;font-size:24px}
   .item .txt{grid-column:2;grid-row:1;min-width:0}
-  .item:hover{border-color:#bcd0c1}
+  .item:hover{border-color:var(--hover)}
   .item:active{transform:translateY(1px)}
   .item.sel{border-color:var(--pine);box-shadow:inset 0 0 0 1px var(--pine)}
   .item .name{font-weight:600;font-size:15.5px}
@@ -876,7 +947,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   }
   .livestatus b{color:var(--pine)}
   .sdot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
-  .sdot.on{background:var(--t1)} .sdot.off{background:#B0553B} .sdot.demo{background:#8A968C}
+  .sdot.on{background:var(--t1)} .sdot.off{background:var(--t4)} .sdot.demo{background:#8A968C}
   .sdot.load{background:var(--pine);animation:blink 1s infinite}
   @keyframes blink{50%{opacity:.3}}
   @media (prefers-reduced-motion:reduce){.sdot.load{animation:none}}
@@ -884,7 +955,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .maparea{position:relative}
   .areabtn{
     position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:500;
-    background:#fff;color:var(--pine);border:1px solid var(--pine);border-radius:999px;
+    background:var(--panel);color:var(--pine);border:1px solid var(--pine);border-radius:999px;
     padding:8px 16px;font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;
     box-shadow:0 2px 12px rgba(0,0,0,.18);display:inline-flex;align-items:center;gap:7px;
   }
@@ -898,10 +969,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
     border:1px dashed var(--line);border-radius:12px;padding:11px 14px;cursor:pointer;
     font:inherit;font-size:13.5px;color:var(--muted);text-align:left;
   }
-  .nod-head:hover{border-color:#bcd0c1;color:var(--ink)}
+  .nod-head:hover{border-color:var(--hover);color:var(--ink)}
   .nod-count{
-    font-family:'Space Grotesk',sans-serif;font-weight:700;color:#6b756d;
-    background:#EAEEE8;border-radius:6px;padding:1px 8px;font-size:14px;
+    font-family:'Space Grotesk',sans-serif;font-weight:700;color:var(--muted);
+    background:var(--line);border-radius:6px;padding:1px 8px;font-size:14px;
   }
   .nod-head .chev{margin-left:auto;transition:transform .15s}
   .nod-head[aria-expanded="true"] .chev{transform:rotate(180deg)}
@@ -936,6 +1007,10 @@ svg.leaflet-image-layer.leaflet-interactive path {
 <body>
 
 <header>
+  <button id="themeToggle" class="theme-toggle" type="button" aria-pressed="false" aria-label="Switch to dark mode">
+    <svg class="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v3M12 18.5v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2.5 12h3M18.5 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+    <svg class="i-moon" viewBox="0 0 24 24" fill="currentColor"><path d="M20.4 14.7A8.5 8.5 0 1 1 9.3 3.6a7 7 0 0 0 11.1 11.1z"/></svg>
+  </button>
   <div class="brandrow">
     <div class="brand">Density<span class="dot">.</span></div>
     <div class="tag">The most protein per calorie, near you right now. Every dish scored by how much protein it delivers per 100 calories.</div>
@@ -1753,6 +1828,28 @@ function renderNoData(el){
     });
   });
 }
+
+/* ---------------- theme toggle ---------------- */
+(function(){
+  const root = document.documentElement, btn = document.getElementById('themeToggle');
+  const KEY = 'density-theme';
+  const isDark = ()=>{
+    const forced = root.getAttribute('data-theme');
+    return forced ? forced==='dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  };
+  const sync = ()=>{
+    const dark = isDark();
+    btn.setAttribute('aria-pressed', String(dark));
+    btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+  };
+  btn.addEventListener('click', ()=>{
+    const next = isDark() ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try{ localStorage.setItem(KEY, next); }catch(e){}
+    sync();
+  });
+  sync();
+})();
 
 /* ---------------- controls wiring ---------------- */
 document.getElementById('sortSeg').addEventListener('click',e=>{
