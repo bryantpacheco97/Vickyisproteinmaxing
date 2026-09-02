@@ -1554,9 +1554,22 @@ function ratingHtml(restaurant){
   const title = n!=null ? `${r.toFixed(1)} stars (${n.toLocaleString()} Google reviews)` : `${r.toFixed(1)} stars on Google`;
   return `<span class="rating" title="${title}">${STAR_SVG}<b class="num">${r.toFixed(1)}</b></span>`;
 }
-// Google's venue-wide cost bucket ($ .. $$$$) — NOT a per-dish price. The app's own
-// per-dish $ figures (from NUTRITION / the est. tier) are the real menu pricing;
-// this is just Google's own guess at how pricey the place is overall.
+// A cuisine-average (estimated) dish carries a guessed price, not this restaurant's
+// real one — showing it to the cent would present that guess as fact. Bucket it into
+// a $/$$/$$$ tier instead, same idea as Google's own priceLevel badge below. Chain
+// dishes (from NUTRITION — real, verified prices) still show the exact figure.
+function priceLabel(x){
+  if(!x.estimated) return `$${x.usd.toFixed(2)}`;
+  const n = x.usd<10 ? 1 : x.usd<20 ? 2 : 3;
+  return '$'.repeat(n);
+}
+function priceTitle(x){
+  const eff = `${(x.e/x.usd).toFixed(2)} protein-efficiency per dollar`;
+  return x.estimated ? `${eff} · ~$${x.usd.toFixed(2)} cuisine average, not this restaurant's real price` : eff;
+}
+// Google's venue-wide cost bucket ($ .. $$$$) — NOT a per-dish price. This is just
+// Google's own guess at how pricey the place is overall, shown alongside the
+// per-dish price above.
 const PRICE_LEVEL_DOTS = { PRICE_LEVEL_FREE:0, PRICE_LEVEL_INEXPENSIVE:1, PRICE_LEVEL_MODERATE:2, PRICE_LEVEL_EXPENSIVE:3, PRICE_LEVEL_VERY_EXPENSIVE:4 };
 function priceLevelHtml(restaurant){
   if(!restaurant || restaurant.priceLevel==null) return '';
@@ -2147,7 +2160,7 @@ function render(){
       <div>
         <div class="badge">Top pick right now</div>
         <div class="pick">${esc(t.name)}${t.estimated?` <span class="est-tag" title="Cuisine-average estimate — not this restaurant's specific menu">avg</span>`:''}</div>
-        <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein · <span class="num" style="color:${tvcol};font-weight:600" title="${(t.e/t.usd).toFixed(2)} protein-efficiency per dollar">$${t.usd.toFixed(2)}</span>${t.rating!=null?' · '+ratingHtml(t):''}${t.priceLevel!=null?' · '+priceLevelHtml(t):''}</div>
+        <div class="where">${esc(t.rest)} · ${kmToMi(t.dist).toFixed(1)} mi · <span class="num">${t.cal}</span> cal · <span class="num">${t.pro}</span> g protein · <span class="num" style="color:${tvcol};font-weight:600" title="${priceTitle(t)}">${priceLabel(t)}</span>${t.rating!=null?' · '+ratingHtml(t):''}${t.priceLevel!=null?' · '+priceLevelHtml(t):''}</div>
         <div class="actions">
           <a class="directions" href="${directionsUrl(t.rlat,t.rlng)}" target="_blank" rel="noopener" aria-label="Get walking directions to ${esc(t.rest)}">${DIR_SVG}Directions</a>
           ${deliveryPillsHtml(t.rest)}
@@ -2192,7 +2205,7 @@ function render(){
         <div class="macros">
           <span class="cal"><b class="num">${x.cal}</b> cal</span>
           <span class="pro"><b class="num">${x.pro}</b> g protein</span>
-          <span class="price num" style="color:${vcol}" title="${v.toFixed(2)} protein-efficiency per dollar"><b>$${x.usd.toFixed(2)}</b></span>
+          <span class="price num" style="color:${vcol}" title="${priceTitle(x)}"><b>${priceLabel(x)}</b></span>
           ${ratingHtml(x)}
           ${priceLevelHtml(x)}
           <span class="dist num">${kmToMi(x.dist).toFixed(1)} mi</span>
