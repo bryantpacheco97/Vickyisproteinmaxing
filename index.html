@@ -967,6 +967,30 @@ svg.leaflet-image-layer.leaflet-interactive path {
   .sdot.load{background:var(--pine);animation:blink 1s infinite}
   @keyframes blink{50%{opacity:.3}}
   @media (prefers-reduced-motion:reduce){.sdot.load{animation:none}}
+  /* map loading overlay — shown while a live search is in flight */
+  .maploading{
+    position:absolute;inset:0;z-index:450;
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    background:color-mix(in srgb, var(--bg) 65%, transparent);
+    pointer-events:none;
+    font-size:13.5px;font-weight:600;color:var(--pine);
+    opacity:0;transition:opacity .15s ease;
+  }
+  .maploading.show{opacity:1}
+  .spinner{
+    width:20px;height:20px;border-radius:50%;flex:none;
+    border:3px solid color-mix(in srgb, var(--pine) 22%, transparent);
+    border-top-color:var(--pine);
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.spinner{animation:none}}
+  @keyframes searchring{
+    0%{box-shadow:0 0 0 0 color-mix(in srgb, var(--pine) 55%, transparent)}
+    100%{box-shadow:0 0 0 16px color-mix(in srgb, var(--pine) 0%, transparent)}
+  }
+  .you.searching{border-radius:50%;animation:searchring 1s ease-out infinite}
+  @media (prefers-reduced-motion:reduce){.you.searching{animation:none}}
   /* search-this-area button */
   .maparea{position:relative}
   .areabtn{
@@ -1093,6 +1117,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
   <div class="right">
     <div class="maparea">
       <div id="map"></div>
+      <div id="mapLoading" class="maploading" aria-hidden="true"><span class="spinner"></span>Searching nearby…</div>
       <button id="areaBtn" class="areabtn" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
         Search this area
@@ -1710,7 +1735,9 @@ function pulse(rid){
 function setCircleVisible(v){ if(radiusCircle) radiusCircle.setStyle({opacity:v?.35:0, fillOpacity:v?.05:0}); }
 
 function setStatus(kind, total, withData){
-  const el=document.getElementById('liveStatus'); if(!el) return;
+  const el=document.getElementById('liveStatus');
+  setMapLoading(state.live && kind==='searching');
+  if(!el) return;
   if(!state.live){ el.innerHTML = `<span class="sdot demo"></span> Sample data — live search off`; return; }
   el.innerHTML = ({
     searching:`<span class="sdot load"></span> Searching OpenStreetMap near your pin…`,
@@ -1719,6 +1746,12 @@ function setStatus(kind, total, withData){
     empty:`<span class="sdot off"></span> No restaurants found here — widen the radius or move the pin`,
     blocked:`<span class="sdot off"></span> Couldn't reach live map data from this preview — open the file in your browser for real pins.`,
   })[kind] || '';
+}
+function setMapLoading(on){
+  const el = document.getElementById('mapLoading');
+  if(el) el.classList.toggle('show', on);
+  const pin = youMarker?.getElement()?.querySelector('.you');
+  if(pin) pin.classList.toggle('searching', on);
 }
 
 /* ---------------- rendering ---------------- */
